@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[dev,test]
+    
+    - name: Lint with ruff
+      run: |
+        ruff check sidecar/ tests/
+    
+    - name: Format check with ruff
+      run: |
+        ruff format --check sidecar/ tests/
+    
+    - name: Type check with pyright (if available)
+      run: |
+        pip install pyright || true
+        pyright sidecar/ || echo "⚠️ Type checking failed (non-blocking)"
+      continue-on-error: true
+    
+    - name: Run tests with coverage
+      run: |
+        pytest --cov=sidecar --cov-report=xml --cov-report=term-missing tests/
+      env:
+        OPENAI_API_KEY: sk-test-dummy-key-for-ci
+        OPENAI_MODEL: gpt-4o-mini
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-${{ matrix.python-version }}
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    
+    - name: Check coverage threshold
+      run: |
+        coverage report --fail-under=32
+      continue-on-error: false

@@ -1,0 +1,13 @@
+﻿.venv/
+__pycache__/
+*.pyc
+.env
+*.bak
+*.erc.*
+*.pdf
+*.net
+.api_key.json
+.recent_projects.json
+.chat_history.json
+.plan_history.json
+.current_project.json

@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kaicad"
+version = "0.2.0"
+description = "AI-powered KiCad schematic editor sidecar"
+authors = [{name = "Gunes Yilmaz"}]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+dependencies = [
+    "kicad-skip==0.2.5",
+    "pydantic>=2.0.0,<3.0.0",
+    "openai>=1.0.0,<2.0.0",
+    "flask>=3.0.0,<4.0.0",
+    "flask-wtf>=1.2.0,<2.0.0",
+    "rich>=13.0.0,<14.0.0",
+    "typer>=0.9.0,<1.0.0",
+    "watchdog>=3.0.0,<5.0.0",
+    "keyring>=24.0.0,<26.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0,<9.0.0",
+    "pre-commit>=3.0.0,<4.0.0",
+    "ruff>=0.1.0,<1.0.0",
+]
+test = [
+    "pytest>=8.0.0,<9.0.0",
+    "pytest-cov>=4.0.0,<6.0.0",
+]
+
+[project.scripts]
+kaicad = "sidecar.main:main"
+kaicad-web = "sidecar.web:main"
+kaicad-desk = "sidecar.desk:main"
+
+[project.urls]
+Homepage = "https://github.com/hunes3d/kAIcad"
+Repository = "https://github.com/hunes3d/kAIcad"
+Issues = "https://github.com/hunes3d/kAIcad/issues"
+
+[tool.setuptools]
+packages = ["sidecar", "templates"]
+package-data = {"templates" = ["*.html"]}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+]
+ignore = [
+    "E501", # line too long (handled by formatter)
+]
+
+[tool.ruff.isort]
+known-first-party = ["sidecar"]

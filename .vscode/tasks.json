@@ -1,0 +1,58 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "sidecar",
+			"type": "shell",
+			"command": "python -m sidecar.main",
+			"problemMatcher": []
+		},
+		{
+			"label": "desktop-gui",
+			"type": "shell",
+			"command": "python -m sidecar.desk",
+			"problemMatcher": []
+		},
+		{
+			"label": "erc",
+			"type": "shell",
+			"command": "kicad-cli sch erc ${input:sch} -o ${input:sch}.erc.txt --format report"
+		},
+		{
+			"label": "pdf",
+			"type": "shell",
+			"command": "kicad-cli sch export pdf ${input:sch} -o ${input:sch}.pdf"
+		},
+		{
+			"label": "netlist",
+			"type": "shell",
+			"command": "kicad-cli sch export netlist ${input:sch} -o ${input:sch}.net"
+		},
+		{
+			"label": "web-gui",
+			"type": "shell",
+			"command": "python -m sidecar.web",
+			"problemMatcher": []
+		},
+		{
+			"label": "plan:demo",
+			"type": "shell",
+			"command": "python -c \"from sidecar.planner import plan_from_prompt; import json; p = plan_from_prompt('Add LED and resistor'); print(json.dumps(p.model_dump(by_alias=True), indent=2))\"",
+			"problemMatcher": []
+		},
+		{
+			"label": "e2e:export-pdf",
+			"type": "shell",
+			"command": "python -c \"from pathlib import Path; from sidecar.planner import plan_from_prompt; from sidecar.writer_skip import apply_plan; from sidecar.tasks import export_pdf; from skip.eeschema import schematic as sch; p = Path('${input:sch}'); doc = sch.Schematic.from_file(str(p)); plan = plan_from_prompt('Add test component'); doc = apply_plan(doc, plan); doc.to_file(str(p)); export_pdf(p); print(f'PDF exported to {p.with_suffix(\\\".pdf\\\")}')\"",
+			"problemMatcher": []
+		}
+	],
+	"inputs": [
+		{
+			"id": "sch",
+			"type": "promptString",
+			"description": "Path to .kicad_sch",
+			"default": "${workspaceFolder}/MyProj/MyProj.kicad_sch"
+		}
+	]
+}
