@@ -6,7 +6,6 @@
 
   <p>
     <a href="https://github.com/hunes3d/kAIcad/actions"><img alt="CI" src="https://github.com/hunes3d/kAIcad/workflows/CI/badge.svg"></a>
-    <a href="https://app.codecov.io/gh/hunes3d/kAIcad"><img alt="Coverage" src="https://codecov.io/gh/hunes3d/kAIcad/branch/main/graph/badge.svg"></a>
     <img alt="Python" src="https://img.shields.io/badge/python-3.10+-blue.svg">
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg"></a>
     <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-green.svg">
@@ -64,9 +63,9 @@ pip install -e .
 Copy-Item .env.example .env
 # Edit .env to set OPENAI_API_KEY and (optionally) OPENAI_MODEL
 
-python -m sidecar.desk   # Desktop GUI
-# python -m sidecar.web  # Web UI
-# python -m sidecar.main # CLI
+python -m kaicad.ui.desktop   # Desktop GUI
+# python -m kaicad.ui.web.app  # Web UI
+# python -m kaicad.ui.cli      # CLI
 ```
 
 ## VS Code tasks
@@ -102,9 +101,7 @@ See `.env.example` for a ready-to-copy template.
 - Refresh the lockfile after dependency changes (requires pip-tools):
   - `pip-compile --generate-hashes --output-file=requirements.lock requirements.txt`
 - Run tests with coverage locally:
-  - `pytest -q --cov=sidecar --cov-report=term-missing`
-
-CI uploads coverage to Codecov; see badge above.
+  - `pytest -q --cov=kaicad --cov-report=term-missing`
 
 ## Tips & troubleshooting
 
@@ -114,9 +111,16 @@ CI uploads coverage to Codecov; see badge above.
 
 ## Wiki
 
-Documentation is also available in the GitHub Wiki. See the local drafts under `wiki/` or visit:
+Documentation is available in the `docs/` folder:
 
-- GitHub Wiki: https://github.com/hunes3d/kAIcad/wiki
+- [Architecture](docs/architecture.md) — System design and module overview
+- [Component Inspection](docs/component-inspection.md) — Querying components and nets
+- [Hierarchical Sheets](docs/hierarchical-sheets.md) — Working with hierarchical designs
+- [Dev Notes](docs/dev-notes.md) — Development guidelines
+- [Roadmap](docs/roadmap.md) — Future plans
+- [Changelog](docs/changelog.md) — Version history
+
+Or visit the GitHub Wiki: https://github.com/hunes3d/kAIcad/wiki
 
 ## License
 

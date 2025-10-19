@@ -28,34 +28,24 @@ jobs:
     
     - name: Lint with ruff
       run: |
-        ruff check sidecar/ tests/
+        ruff check src/kaicad/ tests/
     
     - name: Format check with ruff
       run: |
-        ruff format --check sidecar/ tests/
+        ruff format --check src/kaicad/ tests/
     
     - name: Type check with pyright (if available)
       run: |
         pip install pyright || true
-        pyright sidecar/ || echo "⚠️ Type checking failed (non-blocking)"
+        pyright src/kaicad/ || echo "⚠️ Type checking failed (non-blocking)"
       continue-on-error: true
     
     - name: Run tests with coverage
       run: |
-        pytest --cov=sidecar --cov-report=xml --cov-report=term-missing tests/
+        pytest --cov=kaicad --cov-report=term-missing tests/
       env:
         OPENAI_API_KEY: sk-test-dummy-key-for-ci
         OPENAI_MODEL: gpt-4o-mini
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-${{ matrix.python-version }}
-        fail_ci_if_error: false
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     
     - name: Check coverage threshold
       run: |

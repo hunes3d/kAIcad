@@ -47,9 +47,9 @@ test = [
 ]
 
 [project.scripts]
-kaicad = "sidecar.main:main"
-kaicad-web = "sidecar.web:main"
-kaicad-desk = "sidecar.desk:main"
+kaicad = "kaicad.ui.cli:main"
+kaicad-web = "kaicad.ui.web.app:main"
+kaicad-desk = "kaicad.ui.desktop:main"
 
 [project.urls]
 Homepage = "https://github.com/hunes3d/kAIcad"
@@ -57,8 +57,11 @@ Repository = "https://github.com/hunes3d/kAIcad"
 Issues = "https://github.com/hunes3d/kAIcad/issues"
 
 [tool.setuptools]
-packages = ["sidecar", "templates"]
-package-data = {"templates" = ["*.html"]}
+packages = ["kaicad"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+"kaicad.ui.web" = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -83,4 +86,4 @@ ignore = [
 ]
 
 [tool.ruff.isort]
-known-first-party = ["sidecar"]
+known-first-party = ["kaicad"]

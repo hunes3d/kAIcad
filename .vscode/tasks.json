@@ -4,13 +4,13 @@
 		{
 			"label": "sidecar",
 			"type": "shell",
-			"command": "python -m sidecar.main",
+			"command": "python -m kaicad.ui.cli",
 			"problemMatcher": []
 		},
 		{
 			"label": "desktop-gui",
 			"type": "shell",
-			"command": "python -m sidecar.desk",
+			"command": "python -m kaicad.ui.desktop",
 			"problemMatcher": []
 		},
 		{
@@ -31,19 +31,19 @@
 		{
 			"label": "web-gui",
 			"type": "shell",
-			"command": "python -m sidecar.web",
+			"command": "python -m kaicad.ui.web.app",
 			"problemMatcher": []
 		},
 		{
 			"label": "plan:demo",
 			"type": "shell",
-			"command": "python -c \"from sidecar.planner import plan_from_prompt; import json; p = plan_from_prompt('Add LED and resistor'); print(json.dumps(p.model_dump(by_alias=True), indent=2))\"",
+			"command": "python -c \"from kaicad.core.planner import plan_from_prompt; import json; p = plan_from_prompt('Add LED and resistor'); print(json.dumps(p.model_dump(by_alias=True), indent=2))\"",
 			"problemMatcher": []
 		},
 		{
 			"label": "e2e:export-pdf",
 			"type": "shell",
-			"command": "python -c \"from pathlib import Path; from sidecar.planner import plan_from_prompt; from sidecar.writer_skip import apply_plan; from sidecar.tasks import export_pdf; from skip.eeschema import schematic as sch; p = Path('${input:sch}'); doc = sch.Schematic.from_file(str(p)); plan = plan_from_prompt('Add test component'); doc = apply_plan(doc, plan); doc.to_file(str(p)); export_pdf(p); print(f'PDF exported to {p.with_suffix(\\\".pdf\\\")}')\"",
+			"command": "python -c \"from pathlib import Path; from kaicad.core.planner import plan_from_prompt; from kaicad.core.writer import apply_plan; from kaicad.kicad.tasks import export_pdf; from skip.eeschema import schematic as sch; p = Path('${input:sch}'); doc = sch.Schematic.from_file(str(p)); plan = plan_from_prompt('Add test component'); doc = apply_plan(doc, plan); doc.to_file(str(p)); export_pdf(p); print(f'PDF exported to {p.with_suffix(\\\".pdf\\\")}')\"",
 			"problemMatcher": []
 		}
 	],
