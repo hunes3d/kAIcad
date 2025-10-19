@@ -1,14 +1,14 @@
 """Tests for models module - OpenAI model registry and validation."""
-import pytest
+
 from sidecar.models import (
+    _MODEL_REGISTRY,
     ModelConfig,
+    get_default_model,
     get_model_config,
     get_real_model_name,
     is_model_supported,
     list_supported_models,
-    get_default_model,
     validate_model_for_json,
-    _MODEL_REGISTRY
 )
 
 
@@ -22,9 +22,9 @@ def test_model_config_creation():
         context_window=128000,
         cost_per_1k_input=0.01,
         cost_per_1k_output=0.03,
-        description="Test model"
+        description="Test model",
     )
-    
+
     assert config.name == "test-model"
     assert config.max_tokens == 4096
     assert config.supports_json_mode is True
@@ -45,10 +45,10 @@ def test_model_config_is_valid():
         context_window=1000,
         cost_per_1k_input=0.01,
         cost_per_1k_output=0.01,
-        description="Valid"
+        description="Valid",
     )
     assert valid_config.is_valid is True
-    
+
     # Empty name should be invalid
     invalid_name = ModelConfig(
         name="",
@@ -58,10 +58,10 @@ def test_model_config_is_valid():
         context_window=1000,
         cost_per_1k_input=0.01,
         cost_per_1k_output=0.01,
-        description="Invalid"
+        description="Invalid",
     )
     assert invalid_name.is_valid is False
-    
+
     # Zero max_tokens should be invalid
     invalid_tokens = ModelConfig(
         name="invalid",
@@ -71,7 +71,7 @@ def test_model_config_is_valid():
         context_window=1000,
         cost_per_1k_input=0.01,
         cost_per_1k_output=0.01,
-        description="Invalid"
+        description="Invalid",
     )
     assert invalid_tokens.is_valid is False
 
@@ -83,11 +83,11 @@ def test_get_model_config_existing():
     assert gpt4_config is not None
     assert gpt4_config.name == "gpt-4"
     assert gpt4_config.supports_json_mode is True
-    
+
     gpt4o_config = get_model_config("gpt-4o")
     assert gpt4o_config is not None
     assert gpt4o_config.name == "gpt-4o"
-    
+
     gpt4o_mini_config = get_model_config("gpt-4o-mini")
     assert gpt4o_mini_config is not None
     assert gpt4o_mini_config.name == "gpt-4o-mini"
@@ -105,7 +105,7 @@ def test_get_model_config_aliases():
     gpt5_mini_config = get_model_config("gpt-5-mini")
     assert gpt5_mini_config is not None
     assert gpt5_mini_config.name == "gpt-4o-mini"  # Aliased to real model
-    
+
     # gpt-5 is an alias for gpt-4
     gpt5_config = get_model_config("gpt-5")
     assert gpt5_config is not None
@@ -140,7 +140,7 @@ def test_is_model_supported():
     assert is_model_supported("gpt-4o") is True
     assert is_model_supported("gpt-4o-mini") is True
     assert is_model_supported("gpt-5-mini") is True
-    
+
     # Unsupported model
     assert is_model_supported("nonexistent") is False
     assert is_model_supported("") is False
@@ -149,10 +149,10 @@ def test_is_model_supported():
 def test_list_supported_models():
     """Test listing all supported models."""
     models = list_supported_models()
-    
+
     assert isinstance(models, list)
     assert len(models) > 0
-    
+
     # Check some expected models are in the list
     assert "gpt-4" in models
     assert "gpt-4o" in models
@@ -163,7 +163,7 @@ def test_list_supported_models():
 def test_get_default_model():
     """Test getting the default model."""
     default = get_default_model()
-    
+
     assert default == "gpt-5-mini"
     # Default should be a supported model
     assert is_model_supported(default) is True
@@ -172,7 +172,7 @@ def test_get_default_model():
 def test_validate_model_for_json_valid():
     """Test validating models that support JSON mode."""
     is_valid, error_msg = validate_model_for_json("gpt-4o-mini")
-    
+
     assert is_valid is True
     assert error_msg == ""
 
@@ -180,7 +180,7 @@ def test_validate_model_for_json_valid():
 def test_validate_model_for_json_unsupported_model():
     """Test validating unsupported model."""
     is_valid, error_msg = validate_model_for_json("unsupported-model")
-    
+
     assert is_valid is False
     assert "not supported" in error_msg
     assert "unsupported-model" in error_msg
@@ -212,10 +212,10 @@ def test_model_cost_comparison():
     gpt4_config = get_model_config("gpt-4")
     gpt4o_config = get_model_config("gpt-4o")
     gpt4o_mini_config = get_model_config("gpt-4o-mini")
-    
+
     # gpt-4 should be most expensive
     assert gpt4_config.cost_per_1k_input >= gpt4o_config.cost_per_1k_input
-    
+
     # gpt-4o-mini should be cheapest
     assert gpt4o_mini_config.cost_per_1k_input <= gpt4o_config.cost_per_1k_input
     assert gpt4o_mini_config.cost_per_1k_output <= gpt4o_config.cost_per_1k_output
@@ -225,7 +225,7 @@ def test_model_context_windows():
     """Test that models have appropriate context windows."""
     gpt4_turbo_config = get_model_config("gpt-4-turbo")
     gpt4o_config = get_model_config("gpt-4o")
-    
+
     # Turbo and 4o models should have large context windows
     assert gpt4_turbo_config.context_window >= 100000
     assert gpt4o_config.context_window >= 100000
@@ -241,7 +241,7 @@ def test_all_models_support_json():
 def test_validate_model_error_message_includes_alternatives():
     """Test that validation error includes list of supported models."""
     is_valid, error_msg = validate_model_for_json("bad-model")
-    
+
     assert is_valid is False
     # Error should mention supported models
     assert "gpt-4" in error_msg or "Supported models" in error_msg
@@ -250,7 +250,7 @@ def test_validate_model_error_message_includes_alternatives():
 def test_model_aliases_point_to_better_models():
     """Test that aliases like gpt-5-mini point to modern models."""
     gpt5_mini_real = get_real_model_name("gpt-5-mini")
-    
+
     # Should resolve to gpt-4o-mini (modern, cheap, fast)
     assert gpt5_mini_real == "gpt-4o-mini"
 
@@ -259,7 +259,7 @@ def test_get_model_config_returns_different_objects():
     """Test that get_model_config returns the same config object."""
     config1 = get_model_config("gpt-4o")
     config2 = get_model_config("gpt-4o")
-    
+
     # Should be the same object from registry
     assert config1 is config2
 

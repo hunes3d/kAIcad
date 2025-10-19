@@ -2,10 +2,11 @@ import json
 import os
 import threading
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 try:
     from dotenv import load_dotenv  # type: ignore
+
     load_dotenv()
 except Exception:
     pass
@@ -13,12 +14,13 @@ except Exception:
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 
-from .schema import Plan
-from .planner import plan_from_prompt
-from .writer_skip import apply_plan
-from .tasks import run_erc, export_netlist, export_pdf
 from skip.eeschema import schematic as sch  # type: ignore
+
+from .planner import plan_from_prompt
+from .schema import Plan
 from .settings import Settings
+from .tasks import export_netlist, export_pdf, run_erc
+from .writer_skip import apply_plan
 
 
 def _discover_schematic(proj: Path) -> Optional[Path]:
@@ -46,19 +48,15 @@ class SidecarApp:
         top.pack(fill=tk.X, padx=10, pady=10)
         # Settings button (top-left)
         tk.Button(top, text="⚙ Settings", command=self.open_settings).pack(side=tk.LEFT)
-        
+
         # Model selection dropdown (hot-swappable)
         tk.Label(top, text="  Model:").pack(side=tk.LEFT, padx=(10, 0))
         self.model_var = tk.StringVar(value=self.settings.openai_model)
-        model_options = [
-            "gpt-5",
-            "gpt-5-mini",
-            "gpt-5-nano"
-        ]
+        model_options = ["gpt-5", "gpt-5-mini", "gpt-5-nano"]
         self.model_dropdown = tk.OptionMenu(top, self.model_var, *model_options, command=self.on_model_change)
         self.model_dropdown.config(width=15)
         self.model_dropdown.pack(side=tk.LEFT, padx=6)
-        
+
         tk.Label(top, text="  Project:").pack(side=tk.LEFT, padx=(10, 0))
         self.project_entry = tk.Entry(top, textvariable=self.project_var, width=50)
         self.project_entry.pack(side=tk.LEFT, padx=6)
@@ -133,7 +131,7 @@ class SidecarApp:
         else:
             self.sch_label_var.set("Detected schematic: —")
             self.logln("No .kicad_sch found in the provided folder.")
-    
+
     def on_model_change(self, selected_model: str):
         """Hot-swap the model selection"""
         os.environ["OPENAI_MODEL"] = selected_model
@@ -151,7 +149,7 @@ class SidecarApp:
                 current_model = self.model_var.get()
                 os.environ["OPENAI_MODEL"] = current_model
                 self.root.after(0, lambda: self.logln(f"Generating plan with {current_model}..."))
-                
+
                 enriched = prompt
                 if self.attachments:
                     previews = []
@@ -165,7 +163,7 @@ class SidecarApp:
                     enriched += "\n\nAttached files (previews):\n" + "\n\n".join(previews)
                 self.set_busy(True)
                 plan_result = plan_from_prompt(enriched)
-                
+
                 # Log planner diagnostics
                 if plan_result.diagnostics:
                     for d in plan_result.diagnostics:
@@ -175,10 +173,10 @@ class SidecarApp:
                         if d.suggestion:
                             msg += f" → {d.suggestion}"
                         self.root.after(0, lambda m=msg: self.logln(m))
-                
+
                 self.root.after(0, lambda: self.plan_text_replace(json.dumps(plan_result.plan.model_dump(), indent=2)))
                 self.root.after(0, lambda: self.logln("Plan generated."))
-            except Exception as e:
+            except Exception:
                 self.root.after(0, lambda: messagebox.showerror("kAIcad", f"Plan generation failed: {e}"))
             finally:
                 self.root.after(0, lambda: self.set_busy(False))
@@ -208,7 +206,7 @@ class SidecarApp:
                 original = self.sch_path.read_text(encoding="utf-8")
                 doc = sch.Schematic(str(self.sch_path))
                 result = apply_plan(doc, plan)
-                
+
                 # Log diagnostics
                 for d in result.diagnostics:
                     level = "ERROR" if d.severity == "error" else "WARN" if d.severity == "warning" else "INFO"
@@ -217,11 +215,13 @@ class SidecarApp:
                     if d.suggestion:
                         msg += f" → {d.suggestion}"
                     self.root.after(0, lambda m=msg: self.logln(m))
-                
+
                 if not result.success:
-                    self.root.after(0, lambda: messagebox.showerror("kAIcad", "Plan application failed. See log for details."))
+                    self.root.after(
+                        0, lambda: messagebox.showerror("kAIcad", "Plan application failed. See log for details.")
+                    )
                     return
-                
+
                 bak = self.sch_path.with_suffix(".kicad_sch.bak")
                 bak.write_text(original, encoding="utf-8")
                 doc.to_file(str(self.sch_path))
@@ -231,7 +231,7 @@ class SidecarApp:
                 export_netlist(self.sch_path)
                 export_pdf(self.sch_path)
                 self.root.after(0, lambda: self.logln("Done. ERC report, netlist, and PDF generated."))
-            except Exception as e:
+            except Exception:
                 self.root.after(0, lambda: messagebox.showerror("kAIcad", f"Apply failed: {e}"))
             finally:
                 self.root.after(0, lambda: self.apply_btn.configure(state=tk.NORMAL))
@@ -249,7 +249,7 @@ class SidecarApp:
                 self.root.after(0, lambda: self.logln("Re-running ERC..."))
                 run_erc(self.sch_path)
                 self.root.after(0, lambda: self.logln("ERC re-run complete."))
-            except Exception as e:
+            except Exception:
                 self.root.after(0, lambda: messagebox.showerror("kAIcad", f"ERC failed: {e}"))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -275,7 +275,7 @@ class SidecarApp:
         if files:
             self.attachments = list(files)
             if len(self.attachments) > 3:
-                shown = ", ".join(Path(p).name for p in self.attachments[:3]) + f" +{len(self.attachments)-3} more"
+                shown = ", ".join(Path(p).name for p in self.attachments[:3]) + f" +{len(self.attachments) - 3} more"
             else:
                 shown = ", ".join(Path(p).name for p in self.attachments)
             self.attach_label_var.set(shown)
@@ -325,11 +325,18 @@ class SidecarApp:
         proj_var = tk.StringVar(value=self.project_var.get())
         proj_entry = tk.Entry(r5, textvariable=proj_var, width=40)
         proj_entry.pack(side=tk.LEFT)
-        tk.Button(r5, text="Browse", command=lambda: proj_var.set(filedialog.askdirectory(initialdir=proj_var.get() or str(Path.cwd())) or proj_var.get())).pack(side=tk.LEFT, padx=6)
+        tk.Button(
+            r5,
+            text="Browse",
+            command=lambda: proj_var.set(
+                filedialog.askdirectory(initialdir=proj_var.get() or str(Path.cwd())) or proj_var.get()
+            ),
+        ).pack(side=tk.LEFT, padx=6)
 
         # Test KiCad CLI button
         def test_kicad_cli():
             import subprocess
+
             try:
                 result = subprocess.run(["kicad-cli", "--version"], capture_output=True, text=True, timeout=3)
                 if result.returncode == 0:
@@ -337,7 +344,9 @@ class SidecarApp:
                 else:
                     messagebox.showerror("KiCad CLI Test", f"✗ KiCad CLI error:\n{result.stderr}")
             except FileNotFoundError:
-                messagebox.showerror("KiCad CLI Test", "✗ kicad-cli not found in PATH.\n\nAdd KiCad bin directory to your system PATH.")
+                messagebox.showerror(
+                    "KiCad CLI Test", "✗ kicad-cli not found in PATH.\n\nAdd KiCad bin directory to your system PATH."
+                )
             except Exception as e:
                 messagebox.showerror("KiCad CLI Test", f"✗ Test failed:\n{e}")
 
@@ -347,6 +356,7 @@ class SidecarApp:
 
         btns = tk.Frame(win)
         btns.pack(fill=tk.X, padx=10, pady=10)
+
         def save_and_close():
             try:
                 self.settings.openai_api_key = key_var.get().strip()
@@ -363,6 +373,7 @@ class SidecarApp:
                 win.destroy()
             except Exception as e:
                 messagebox.showerror("kAIcad", f"Failed to save settings: {e}")
+
         tk.Button(btns, text="Save", command=save_and_close).pack(side=tk.RIGHT)
         tk.Button(btns, text="Close", command=win.destroy).pack(side=tk.RIGHT, padx=6)
 

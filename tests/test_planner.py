@@ -1,20 +1,23 @@
 """Tests for planner module."""
+
 import json
 import os
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from sidecar.planner import plan_from_prompt, _demo_plan
-from sidecar.schema import Plan, PLAN_SCHEMA_VERSION
+
+from sidecar.planner import _demo_plan, plan_from_prompt
+from sidecar.schema import PLAN_SCHEMA_VERSION, Plan
 
 
 def test_demo_plan_structure():
     """Test that _demo_plan returns a valid Plan with expected structure."""
     plan = _demo_plan()
-    
+
     assert isinstance(plan, Plan)
     assert plan.plan_version == PLAN_SCHEMA_VERSION
     assert len(plan.ops) == 4
-    
+
     # Check specific operations - ops are typed Pydantic models
     assert plan.ops[0].op == "add_component"
     assert plan.ops[0].ref == "R1"
@@ -27,10 +30,10 @@ def test_plan_from_prompt_no_api_key():
     """Test that plan_from_prompt returns demo plan when no API key is set."""
     with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
         result = plan_from_prompt("Add LED and resistor")
-        
+
         assert result.plan is not None
         assert len(result.diagnostics) > 0
-        
+
         # Check for warning about missing API key
         warning = next((d for d in result.diagnostics if d.severity == "warning"), None)
         assert warning is not None
@@ -43,20 +46,17 @@ def test_plan_from_prompt_with_deprecated_kai_model():
     original_key = os.environ.get("OPENAI_API_KEY")
     original_model = os.environ.get("OPENAI_MODEL")
     original_kai = os.environ.get("KAI_MODEL")
-    
+
     try:
         os.environ["OPENAI_API_KEY"] = "sk-test-key"  # Need key to get past early return
         if "OPENAI_MODEL" in os.environ:
             del os.environ["OPENAI_MODEL"]
         os.environ["KAI_MODEL"] = "gpt-4o"
-        
+
         result = plan_from_prompt("Test prompt")
-        
+
         # Should have deprecation warning
-        deprecation_warning = next(
-            (d for d in result.diagnostics if "deprecated" in d.message.lower()),
-            None
-        )
+        deprecation_warning = next((d for d in result.diagnostics if "deprecated" in d.message.lower()), None)
         assert deprecation_warning is not None
         assert "KAI_MODEL" in deprecation_warning.message
     finally:
@@ -75,12 +75,9 @@ def test_plan_from_prompt_with_deprecated_kai_model():
 
 def test_plan_from_prompt_invalid_model():
     """Test that invalid model name returns error diagnostic."""
-    with patch.dict(os.environ, {
-        "OPENAI_API_KEY": "sk-test-key",
-        "OPENAI_MODEL": "invalid-model-name"
-    }, clear=False):
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "OPENAI_MODEL": "invalid-model-name"}, clear=False):
         result = plan_from_prompt("Add component")
-        
+
         # Should have error diagnostic about invalid model
         error = next((d for d in result.diagnostics if d.severity == "error"), None)
         assert error is not None
@@ -120,11 +117,11 @@ def test_plan_from_prompt_model_alias():
 def test_plan_serialization():
     """Test that generated plans can be serialized to JSON."""
     plan = _demo_plan()
-    
+
     # Should be serializable
     json_str = plan.model_dump_json()
     assert isinstance(json_str, str)
-    
+
     # Should be deserializable
     data = json.loads(json_str)
     reloaded = Plan.model_validate(data)

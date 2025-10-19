@@ -1,13 +1,14 @@
 """Golden fixture tests for kAIcad - test full pipeline with real KiCad files"""
-import pytest
+
 import subprocess
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from sidecar.schema import Plan, PLAN_SCHEMA_VERSION, AddComponent, Wire, Label
-from sidecar.writer_skip import apply_plan
+
+import pytest
 from skip.eeschema import schematic as sch  # type: ignore
 
+from sidecar.schema import PLAN_SCHEMA_VERSION, AddComponent, Label, Plan, Wire
+from sidecar.writer_skip import apply_plan
 
 # Minimal valid KiCad 9.0 schematic template
 MINIMAL_SCHEMATIC_TEMPLATE = """(kicad_sch
@@ -63,12 +64,7 @@ MINIMAL_SCHEMATIC_TEMPLATE = """(kicad_sch
 def has_kicad_cli() -> bool:
     """Check if kicad-cli is available on PATH"""
     try:
-        result = subprocess.run(
-            ["kicad-cli", "--version"],
-            capture_output=True,
-            timeout=3,
-            check=False
-        )
+        result = subprocess.run(["kicad-cli", "--version"], capture_output=True, timeout=3, check=False)
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -78,13 +74,16 @@ def can_add_components() -> bool:
     """Detect whether kicad-skip supports programmatic symbol creation from libraries."""
     try:
         from skip.eeschema import schematic as sch
-        return hasattr(sch, 'Symbol') and hasattr(sch.Symbol, 'from_lib')
+
+        return hasattr(sch, "Symbol") and hasattr(sch.Symbol, "from_lib")
     except Exception:
         return False
 
 
 @pytest.mark.skipif(not has_kicad_cli(), reason="kicad-cli not found in PATH")
-@pytest.mark.skipif(not can_add_components(), reason="kicad-skip does not support programmatic symbol creation in this environment")
+@pytest.mark.skipif(
+    not can_add_components(), reason="kicad-skip does not support programmatic symbol creation in this environment"
+)
 def test_add_led_resistor_with_erc():
     """
     Golden fixture test: Add LED + resistor, verify components exist,
@@ -93,79 +92,63 @@ def test_add_led_resistor_with_erc():
     with TemporaryDirectory() as tmpdir:
         sch_path = Path(tmpdir) / "test.kicad_sch"
         sch_path.write_text(MINIMAL_SCHEMATIC_TEMPLATE, encoding="utf-8")
-        
+
         # Create plan to add LED and resistor
         plan = Plan(
             plan_version=PLAN_SCHEMA_VERSION,
             ops=[
-                AddComponent(
-                    op="add_component",
-                    ref="R1",
-                    symbol="Device:R",
-                    value="1k",
-                    at=(100, 60),
-                    rot=0
-                ),
-                AddComponent(
-                    op="add_component",
-                    ref="D1",
-                    symbol="Device:LED",
-                    value="RED",
-                    at=(120, 60),
-                    rot=0
-                ),
-                Label(
-                    op="label",
-                    net="VCC",
-                    at=(90, 60)
-                )
-            ]
+                AddComponent(op="add_component", ref="R1", symbol="Device:R", value="1k", at=(100, 60), rot=0),
+                AddComponent(op="add_component", ref="D1", symbol="Device:LED", value="RED", at=(120, 60), rot=0),
+                Label(op="label", net="VCC", at=(90, 60)),
+            ],
         )
         # Apply plan
         doc = sch.Schematic(str(sch_path))
         result = apply_plan(doc, plan)
-        
+
         # Verify success
         assert result.success, f"Apply failed: {[d.message for d in result.diagnostics if d.severity == 'error']}"
         assert "R1" in result.affected_refs
         assert "D1" in result.affected_refs
-        
+
         # Write to file
         doc.to_file(str(sch_path))
-        
+
         # Re-read and verify components exist
         doc = sch.Schematic(str(sch_path))
-        symbols = list(getattr(doc, 'symbol', []))
+        symbols = list(getattr(doc, "symbol", []))
 
         refs = [s.ref() for s in symbols]
         assert "R1" in refs, f"R1 not found in schematic, found: {refs}"
         assert "D1" in refs, f"D1 not found in schematic, found: {refs}"
-        
+
         # Find our symbols and verify values
         r1 = next((s for s in symbols if s.ref() == "R1"), None)
         d1 = next((s for s in symbols if s.ref() == "D1"), None)
-        
+
         assert r1 is not None, "R1 symbol not found"
         assert d1 is not None, "D1 symbol not found"
         assert r1.value() == "1k", f"R1 value wrong: {r1.value()}"
         assert d1.value() == "RED", f"D1 value wrong: {d1.value()}"
-        
+
         # Run ERC and verify it completes (doesn't crash)
         erc_output = sch_path.with_suffix(".erc.txt")
         result = subprocess.run(
             ["kicad-cli", "sch", "erc", str(sch_path), "-o", str(erc_output), "--format", "report"],
             capture_output=True,
             timeout=10,
-            check=False
+            check=False,
         )
-        
+
         # ERC should complete (may have warnings about unconnected pins, but shouldn't crash)
         assert result.returncode in [0, 2], f"ERC failed with code {result.returncode}: {result.stderr.decode()}"
         assert erc_output.exists(), "ERC output file not created"
 
 
 @pytest.mark.skipif(not has_kicad_cli(), reason="kicad-cli not found in PATH")
-@pytest.mark.skipif(not can_add_components(), reason="kicad-skip does not support programmatic symbol creation in this environment")
+@pytest.mark.skipif(
+    not can_add_components(), reason="kicad-skip does not support programmatic symbol creation in this environment"
+)
 def test_wire_operation_creates_connection():
     """
     Test that wire operations create valid connections.
@@ -174,55 +157,41 @@ def test_wire_operation_creates_connection():
     with TemporaryDirectory() as tmpdir:
         sch_path = Path(tmpdir) / "test_wire.kicad_sch"
         sch_path.write_text(MINIMAL_SCHEMATIC_TEMPLATE, encoding="utf-8")
-        
+
         # Create plan with components and wire
         plan = Plan(
             plan_version=PLAN_SCHEMA_VERSION,
             ops=[
-                AddComponent(
-                    op="add_component",
-                    ref="R1",
-                    symbol="Device:R",
-                    value="1k",
-                    at=(100, 60),
-                    rot=0
-                ),
-                AddComponent(
-                    op="add_component",
-                    ref="R2",
-                    symbol="Device:R",
-                    value="2k",
-                    at=(120, 60),
-                    rot=0
-                ),
-                Wire(
-                    op="wire",
-                    from_="R1:2",
-                    to="R2:1"
-                )
-            ]
+                AddComponent(op="add_component", ref="R1", symbol="Device:R", value="1k", at=(100, 60), rot=0),
+                AddComponent(op="add_component", ref="R2", symbol="Device:R", value="2k", at=(120, 60), rot=0),
+                Wire(op="wire", from_="R1:2", to="R2:1"),
+            ],
         )
-        
+
         # Apply plan
         doc = sch.Schematic(str(sch_path))
         result = apply_plan(doc, plan)
-        
+
         # Verify application succeeded
-        assert result.success, f"Wire operation failed: {[d.message for d in result.diagnostics if d.severity == 'error']}"
-        
+        assert result.success, (
+            f"Wire operation failed: {[d.message for d in result.diagnostics if d.severity == 'error']}"
+        )
+
         # Check that wire operation did SOMETHING (not a no-op)
-        wire_diagnostics = [d for d in result.diagnostics if "wire" in d.message.lower() or "label" in d.message.lower()]
+        wire_diagnostics = [
+            d for d in result.diagnostics if "wire" in d.message.lower() or "label" in d.message.lower()
+        ]
         assert len(wire_diagnostics) > 0, "Wire operation produced no diagnostics (possible no-op)"
-        
+
         # Write and verify file is valid
         doc.to_file(str(sch_path))
-        
+
         # Verify KiCad can read the file
         result = subprocess.run(
             ["kicad-cli", "sch", "export", "pdf", str(sch_path), "-o", str(sch_path.with_suffix(".pdf"))],
             capture_output=True,
             timeout=10,
-            check=False
+            check=False,
         )
         assert result.returncode == 0, f"KiCad failed to process schematic: {result.stderr.decode()}"
 
@@ -234,27 +203,18 @@ def test_label_operation_failure_surfaces():
     with TemporaryDirectory() as tmpdir:
         sch_path = Path(tmpdir) / "test_label.kicad_sch"
         sch_path.write_text(MINIMAL_SCHEMATIC_TEMPLATE, encoding="utf-8")
-        
+
         # Create plan with label at potentially invalid position
-        plan = Plan(
-            plan_version=PLAN_SCHEMA_VERSION,
-            ops=[
-                Label(
-                    op="label",
-                    net="TEST_NET",
-                    at=(100, 60)
-                )
-            ]
-        )
-        
+        plan = Plan(plan_version=PLAN_SCHEMA_VERSION, ops=[Label(op="label", net="TEST_NET", at=(100, 60))])
+
         # Apply plan
         doc = sch.Schematic(str(sch_path))
         result = apply_plan(doc, plan)
-        
+
         # Label should either succeed with info diagnostic, or fail with error diagnostic
         label_diagnostics = [d for d in result.diagnostics if "label" in d.message.lower()]
         assert len(label_diagnostics) > 0, "Label operation produced no diagnostics"
-        
+
         # Verify diagnostic is explicit (not silently swallowed)
         for d in label_diagnostics:
             assert d.severity in ["info", "error", "warning"], f"Unexpected severity: {d.severity}"
@@ -268,22 +228,20 @@ def test_schema_version_mismatch_prevents_apply():
     with TemporaryDirectory() as tmpdir:
         sch_path = Path(tmpdir) / "test_version.kicad_sch"
         sch_path.write_text(MINIMAL_SCHEMATIC_TEMPLATE, encoding="utf-8")
-        
+
         # Create plan with wrong version
         plan = Plan(
             plan_version=999,  # Invalid version
-            ops=[
-                Label(op="label", net="TEST", at=(100, 100))
-            ]
+            ops=[Label(op="label", net="TEST", at=(100, 100))],
         )
-        
+
         doc = sch.Schematic(str(sch_path))
         result = apply_plan(doc, plan)
-        
+
         # Should fail with schema version error
         assert result.success is False
         assert result.has_errors()
-        
+
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) > 0
         assert any("schema version" in e.message.lower() for e in errors)
@@ -294,31 +252,29 @@ def test_apply_result_structure():
     Test that ApplyResult has expected structure and methods.
     """
     from sidecar.schema import ApplyResult, Diagnostic
-    
+
     # Test success case
     success_result = ApplyResult(
         success=True,
-        diagnostics=[
-            Diagnostic(stage="writer", severity="info", message="Test info")
-        ],
-        affected_refs=["R1", "R2"]
+        diagnostics=[Diagnostic(stage="writer", severity="info", message="Test info")],
+        affected_refs=["R1", "R2"],
     )
-    
+
     assert success_result.success is True
     assert success_result.has_errors() is False
     assert success_result.has_warnings() is False
     assert len(success_result.affected_refs) == 2
-    
+
     # Test failure case
     fail_result = ApplyResult(
         success=False,
         diagnostics=[
             Diagnostic(stage="writer", severity="error", message="Test error"),
-            Diagnostic(stage="writer", severity="warning", message="Test warning")
+            Diagnostic(stage="writer", severity="warning", message="Test warning"),
         ],
-        affected_refs=[]
+        affected_refs=[],
     )
-    
+
     assert fail_result.success is False
     assert fail_result.has_errors() is True
     assert fail_result.has_warnings() is True
@@ -326,7 +282,9 @@ def test_apply_result_structure():
 
 
 @pytest.mark.skipif(not has_kicad_cli(), reason="kicad-cli not found in PATH")
-@pytest.mark.skipif(not can_add_components(), reason="kicad-skip does not support programmatic symbol creation in this environment")
+@pytest.mark.skipif(
+    not can_add_components(), reason="kicad-skip does not support programmatic symbol creation in this environment"
+)
 def test_netlist_export_after_apply():
     """
     Test that netlist export works after applying a plan.
@@ -334,38 +292,30 @@ def test_netlist_export_after_apply():
     with TemporaryDirectory() as tmpdir:
         sch_path = Path(tmpdir) / "test_netlist.kicad_sch"
         sch_path.write_text(MINIMAL_SCHEMATIC_TEMPLATE, encoding="utf-8")
-        
+
         plan = Plan(
             plan_version=PLAN_SCHEMA_VERSION,
-            ops=[
-                AddComponent(
-                    op="add_component",
-                    ref="R1",
-                    symbol="Device:R",
-                    value="10k",
-                    at=(100, 60)
-                )
-            ]
+            ops=[AddComponent(op="add_component", ref="R1", symbol="Device:R", value="10k", at=(100, 60))],
         )
-        
+
         doc = sch.Schematic(str(sch_path))
         result = apply_plan(doc, plan)
         assert result.success
-        
+
         doc.to_file(str(sch_path))
-        
+
         # Export netlist
         netlist_path = sch_path.with_suffix(".net")
         result = subprocess.run(
             ["kicad-cli", "sch", "export", "netlist", str(sch_path), "-o", str(netlist_path)],
             capture_output=True,
             timeout=10,
-            check=False
+            check=False,
         )
-        
+
         assert result.returncode == 0, f"Netlist export failed: {result.stderr.decode()}"
         assert netlist_path.exists(), "Netlist file not created"
-        
+
         # Verify netlist contains our component
     netlist_content = netlist_path.read_text(encoding="utf-8")
     assert "R1" in netlist_content, "R1 not found in netlist"

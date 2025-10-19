@@ -1,0 +1,4 @@
+[console_scripts]
+kaicad = sidecar.main:main
+kaicad-desk = sidecar.desk:main
+kaicad-web = sidecar.web:main
