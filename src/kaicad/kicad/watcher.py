@@ -15,7 +15,7 @@ class _Handler(FileSystemEventHandler):
         self.cb(Path(event.src_path))
 
 
-def watch(path: Path, callback):
+def watch(path: Path, callback) -> None:
     obs = Observer()
     obs.schedule(_Handler(callback), str(path), recursive=True)
     obs.start()

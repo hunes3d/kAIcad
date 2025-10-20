@@ -176,8 +176,9 @@ class SidecarApp:
 
                 self.root.after(0, lambda: self.plan_text_replace(json.dumps(plan_result.plan.model_dump(), indent=2)))
                 self.root.after(0, lambda: self.logln("Plan generated."))
-            except Exception:
-                self.root.after(0, lambda: messagebox.showerror("kAIcad", f"Plan generation failed: {e}"))
+            except Exception as e:
+                error_msg = str(e)  # Capture error message before lambda
+                self.root.after(0, lambda: messagebox.showerror("kAIcad", f"Plan generation failed: {error_msg}"))
             finally:
                 self.root.after(0, lambda: self.set_busy(False))
 
@@ -231,8 +232,9 @@ class SidecarApp:
                 export_netlist(self.sch_path)
                 export_pdf(self.sch_path)
                 self.root.after(0, lambda: self.logln("Done. ERC report, netlist, and PDF generated."))
-            except Exception:
-                self.root.after(0, lambda: messagebox.showerror("kAIcad", f"Apply failed: {e}"))
+            except Exception as e:
+                error_msg = str(e)
+                self.root.after(0, lambda: messagebox.showerror("kAIcad", f"Apply failed: {error_msg}"))
             finally:
                 self.root.after(0, lambda: self.apply_btn.configure(state=tk.NORMAL))
                 self.root.after(0, lambda: self.set_busy(False))
@@ -249,8 +251,9 @@ class SidecarApp:
                 self.root.after(0, lambda: self.logln("Re-running ERC..."))
                 run_erc(self.sch_path)
                 self.root.after(0, lambda: self.logln("ERC re-run complete."))
-            except Exception:
-                self.root.after(0, lambda: messagebox.showerror("kAIcad", f"ERC failed: {e}"))
+            except Exception as e:
+                error_msg = str(e)  # Capture error message before lambda
+                self.root.after(0, lambda: messagebox.showerror("kAIcad", f"ERC failed: {error_msg}"))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -378,7 +381,7 @@ class SidecarApp:
         tk.Button(btns, text="Close", command=win.destroy).pack(side=tk.RIGHT, padx=6)
 
 
-def main():
+def main() -> None:
     root = tk.Tk()
     SidecarApp(root)
     root.mainloop()

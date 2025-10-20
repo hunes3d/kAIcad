@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from kaicad.settings import (
+from kaicad.config.settings import (
     KEYRING_AVAILABLE,
     KEYRING_SERVICE,
     KEYRING_USERNAME,
@@ -77,10 +77,10 @@ def test_settings_load_from_env():
         {"OPENAI_API_KEY": "sk-test-env-key", "OPENAI_MODEL": "gpt-4o", "OPENAI_TEMPERATURE": "0.7"},
         clear=False,
     ):
-        with patch("sidecar.settings.CONFIG_PATH") as mock_path:
+        with patch("kaicad.config.settings.CONFIG_PATH") as mock_path:
             mock_path.exists.return_value = False
             # Also mock keyring to prevent it from returning a stored key
-            with patch("sidecar.settings.keyring") as mock_keyring:
+            with patch("kaicad.config.settings.keyring") as mock_keyring:
                 mock_keyring.get_password.return_value = None
 
                 settings = Settings.load()
@@ -104,8 +104,8 @@ def test_settings_load_from_config_file():
         config_path = Path(tmpdir) / "config.json"
         config_path.write_text(json.dumps(config_data), encoding="utf-8")
 
-        with patch("sidecar.settings.CONFIG_PATH", config_path):
-            with patch("sidecar.settings.KEYRING_AVAILABLE", False):
+        with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+            with patch("kaicad.config.settings.KEYRING_AVAILABLE", False):
                 settings = Settings.load()
 
                 assert settings.openai_model == "gpt-4o-mini"
@@ -133,8 +133,8 @@ def test_settings_load_env_overrides_config():
             config_path = Path(tmpdir) / "config.json"
             config_path.write_text(json.dumps(config_data), encoding="utf-8")
 
-            with patch("sidecar.settings.CONFIG_PATH", config_path):
-                with patch("sidecar.settings.KEYRING_AVAILABLE", False):
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.KEYRING_AVAILABLE", False):
                     # Set environment variables
                     os.environ["OPENAI_MODEL"] = "gpt-4o"
                     os.environ["OPENAI_TEMPERATURE"] = "0.7"
@@ -174,8 +174,8 @@ def test_settings_load_with_keyring():
         config_path = Path(tmpdir) / "config.json"
         config_path.write_text(json.dumps(config_data), encoding="utf-8")
 
-        with patch("sidecar.settings.CONFIG_PATH", config_path):
-            with patch("sidecar.settings.keyring") as mock_keyring:
+        with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+            with patch("kaicad.config.settings.keyring") as mock_keyring:
                 mock_keyring.get_password.return_value = "sk-keyring-key"
 
                 settings = Settings.load()
@@ -198,9 +198,9 @@ def test_settings_save():
         config_dir = Path(tmpdir) / "config"
         config_path = config_dir / "config.json"
 
-        with patch("sidecar.settings.CONFIG_DIR", config_dir):
-            with patch("sidecar.settings.CONFIG_PATH", config_path):
-                with patch("sidecar.settings.KEYRING_AVAILABLE", False):
+        with patch("kaicad.config.settings.CONFIG_DIR", config_dir):
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.KEYRING_AVAILABLE", False):
                     settings.save()
 
                     assert config_path.exists()
@@ -223,9 +223,9 @@ def test_settings_save_with_keyring():
         config_dir = Path(tmpdir)
         config_path = config_dir / "config.json"
 
-        with patch("sidecar.settings.CONFIG_DIR", config_dir):
-            with patch("sidecar.settings.CONFIG_PATH", config_path):
-                with patch("sidecar.settings.keyring") as mock_keyring:
+        with patch("kaicad.config.settings.CONFIG_DIR", config_dir):
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.keyring") as mock_keyring:
                     settings.save()
 
                     # API key should be saved to keyring
@@ -265,8 +265,8 @@ def test_settings_load_invalid_config_file():
             config_path = Path(tmpdir) / "config.json"
             config_path.write_text("{ invalid json }", encoding="utf-8")
 
-            with patch("sidecar.settings.CONFIG_PATH", config_path):
-                with patch("sidecar.settings.KEYRING_AVAILABLE", False):
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.KEYRING_AVAILABLE", False):
                     # Should not raise, should use defaults
                     settings = Settings.load()
 
@@ -287,9 +287,9 @@ def test_settings_save_keyring_error():
         config_dir = Path(tmpdir)
         config_path = config_dir / "config.json"
 
-        with patch("sidecar.settings.CONFIG_DIR", config_dir):
-            with patch("sidecar.settings.CONFIG_PATH", config_path):
-                with patch("sidecar.settings.keyring") as mock_keyring:
+        with patch("kaicad.config.settings.CONFIG_DIR", config_dir):
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.keyring") as mock_keyring:
                     mock_keyring.set_password.side_effect = Exception("Keyring error")
 
                     # Should not raise, should still save config file

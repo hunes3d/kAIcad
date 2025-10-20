@@ -1,6 +1,7 @@
 from skip.eeschema.schematic import Schematic, Symbol
 
 from kaicad.schema.plan import PLAN_SCHEMA_VERSION, ApplyResult, Diagnostic, Plan
+from kaicad.utils.validation import validate_coordinate, validate_symbol_name, validate_wire_format
 
 # KiCad grid constant: 2.54mm (100 mil) - standard schematic grid
 GRID_MM = 2.54
@@ -123,6 +124,20 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
 
     for op in plan.ops:
         if op.op == "add_component":
+            # Validate symbol name to prevent injection attacks (SECURITY)
+            is_valid_symbol, symbol_error = validate_symbol_name(op.symbol)
+            if not is_valid_symbol:
+                diagnostics.append(
+                    Diagnostic(
+                        stage="writer",
+                        severity="error",
+                        ref=op.ref,
+                        message=f"Invalid symbol name: {symbol_error}",
+                        suggestion="Use valid KiCad format 'Library:Name' (e.g., 'Device:R')",
+                    )
+                )
+                continue
+            
             # Try preferred API path if available (patched in tests)
             try:
                 if hasattr(Symbol, "from_lib"):
@@ -139,7 +154,22 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
                         if hasattr(sym, "set_value"):
                             sym.set_value(op.value)  # type: ignore[attr-defined]
                     # Position
-                    x, y = snap_to_grid(op.at[0]), snap_to_grid(op.at[1])
+                    # Validate coordinate format
+                    coord_valid, coord_error, coords = validate_coordinate(op.at)
+                    if not coord_valid:
+                        diagnostics.append(
+                            Diagnostic(
+                                stage="writer",
+                                severity="error",
+                                ref=op.ref,
+                                message=f"Invalid coordinate: {coord_error}",
+                                suggestion="Use [x, y] format with numeric values",
+                            )
+                        )
+                        continue
+                    
+                    x, y = coords
+                    x, y = snap_to_grid(x), snap_to_grid(y)
                     try:
                         sym.at = x, y
                     except Exception:
@@ -181,8 +211,33 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
         elif op.op == "wire":
             # Wire between pins identified as REF:PIN using indexed lookups
             try:
-                from_ref, from_pin = op.from_.split(":")
-                to_ref, to_pin = op.to.split(":")
+                # Validate wire format with security checks
+                from_valid, from_error, from_parts = validate_wire_format(op.from_)
+                if not from_valid:
+                    diagnostics.append(
+                        Diagnostic(
+                            stage="writer",
+                            severity="error",
+                            message=f"Invalid 'from' wire format: {from_error}",
+                            suggestion="Use format 'REF:PIN' (e.g., 'R1:1')",
+                        )
+                    )
+                    continue
+                
+                to_valid, to_error, to_parts = validate_wire_format(op.to)
+                if not to_valid:
+                    diagnostics.append(
+                        Diagnostic(
+                            stage="writer",
+                            severity="error",
+                            message=f"Invalid 'to' wire format: {to_error}",
+                            suggestion="Use format 'REF:PIN' (e.g., 'R1:2')",
+                        )
+                    )
+                    continue
+                
+                from_ref, from_pin = from_parts
+                to_ref, to_pin = to_parts
 
                 # O(1) pin coordinate lookups with validation
                 from_pos = lookup_pin_coords(from_ref, from_pin, ref_index, pin_index, diagnostics)
@@ -297,8 +352,21 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
                 )
         elif op.op == "label":
             try:
-                # Snap label position to grid and use collection API
-                x, y = snap_to_grid(op.at[0]), snap_to_grid(op.at[1])
+                # Validate and snap label position to grid
+                coord_valid, coord_error, coords = validate_coordinate(op.at)
+                if not coord_valid:
+                    diagnostics.append(
+                        Diagnostic(
+                            stage="writer",
+                            severity="error",
+                            message=f"Invalid label coordinate: {coord_error}",
+                            suggestion="Use [x, y] format with numeric values",
+                        )
+                    )
+                    continue
+                
+                x, y = coords
+                x, y = snap_to_grid(x), snap_to_grid(y)
                 lab = doc.label.new()
                 lab.value = op.net
                 lab.at = x, y

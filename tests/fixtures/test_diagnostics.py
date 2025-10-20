@@ -86,7 +86,7 @@ def test_apply_plan_diagnostic_on_error():
     mock_doc = Mock()
     mock_doc.symbol = []  # Empty iterable for ref index
 
-    with patch("sidecar.writer_skip.Symbol") as MockSymbol:
+    with patch("kaicad.core.writer.Symbol") as MockSymbol:
         MockSymbol.from_lib.side_effect = Exception("Library not found")
 
         result = apply_plan(mock_doc, plan)

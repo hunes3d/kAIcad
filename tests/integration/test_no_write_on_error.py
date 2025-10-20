@@ -58,10 +58,10 @@ def test_ui_respects_apply_result_success():
     #     # Show errors, don't save
     #     pass
 
-    # Let's verify the pattern is documented in writer_skip
+    # Let's verify the pattern is documented in writer
     import inspect
 
-    from kaicad.core import writer_skip
+    from kaicad.core import writer
 
     # Check that ApplyResult has success field
     from kaicad.schema.plan import ApplyResult
@@ -70,7 +70,7 @@ def test_ui_respects_apply_result_success():
     assert "success" in ApplyResult.model_fields
 
     # Verify apply_plan returns ApplyResult
-    sig = inspect.signature(writer_skip.apply_plan)
+    sig = inspect.signature(writer.apply_plan)
     assert sig.return_annotation.__name__ == "ApplyResult"
 
     # This test passes if the structure is correct
@@ -90,7 +90,7 @@ def test_file_unchanged_on_component_error():
         ops=[{"op": "add_component", "ref": "R1", "symbol": "FakeLib:NonExistent", "value": "1k", "at": [100, 100]}],
     )
 
-    with patch("sidecar.writer_skip.Symbol") as MockSymbol:
+    with patch("kaicad.core.writer.Symbol") as MockSymbol:
         MockSymbol.from_lib.side_effect = Exception("Library not found")
 
         # Apply (should fail on Symbol.from_lib)

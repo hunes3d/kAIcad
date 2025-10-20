@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 
 from kaicad.core.models import get_default_model, get_real_model_name, validate_model_for_json
 from kaicad.schema.plan import PLAN_SCHEMA_VERSION, Diagnostic, Plan, PlanResult
+
+logger = logging.getLogger(__name__)
 
 
 def _demo_plan() -> Plan:
@@ -38,7 +41,7 @@ def plan_from_prompt(prompt: str) -> PlanResult:
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("[planner] No OPENAI_API_KEY found, returning demo plan")
+        logger.warning("No OPENAI_API_KEY found, returning demo plan")
         diagnostics.append(
             Diagnostic(
                 stage="planner",
@@ -79,9 +82,9 @@ def plan_from_prompt(prompt: str) -> PlanResult:
     # Get real model name (handles aliases like gpt-5-mini -> gpt-4o-mini)
     real_model = get_real_model_name(model)
     if real_model != model:
-        print(f"[planner] Using model: {model} (aliased to {real_model})")
+        logger.info(f"Using model: {model} (aliased to {real_model})")
     else:
-        print(f"[planner] Using model: {model}")
+        logger.info(f"Using model: {model}")
 
     model = real_model  # Use real name for API calls
 

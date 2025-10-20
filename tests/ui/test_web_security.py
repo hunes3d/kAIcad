@@ -31,9 +31,12 @@ def temp_env(env: dict):
 def test_web_fails_without_secret_in_production():
     # Test that _configure_security raises when called with production settings and no key
     from flask import Flask
+    import sys
+    import kaicad.ui.web.app as web_module
 
-    import kaicad.ui.web.app as web
-
+    # Get the module from sys.modules to access module-level variables
+    web_module = sys.modules['kaicad.ui.web.app']
+    
     # Create a fresh test app
     test_app = Flask(__name__)
 
@@ -42,22 +45,27 @@ def test_web_fails_without_secret_in_production():
         with pytest.raises(RuntimeError, match="FLASK_SECRET_KEY"):
             # Create a new _configure_security call by manually calling it
             # We need to reset the flag temporarily
-            old_flag = web._app_configured
-            web._app_configured = False
+            old_flag = web_module._app_configured
+            web_module._app_configured = False
             try:
-                web._configure_security(test_app)
+                web_module._configure_security(test_app)
             finally:
-                web._app_configured = old_flag
+                web_module._app_configured = old_flag
 
 
 def test_web_allows_dev_mode_without_secret(monkeypatch):
     # In development, app should start even without explicit secret
     with temp_env({"FLASK_ENV": "development", "FLASK_SECRET_KEY": None}):
         from importlib import reload
+        import sys
 
-        import kaicad.ui.web.app as web
-
-        app = reload(web).create_app()
+        web_module = sys.modules.get('kaicad.ui.web.app')
+        if web_module:
+            web_module = reload(web_module)
+        else:
+            import kaicad.ui.web.app as web_module
+            
+        app = web_module.create_app()
         assert app.secret_key is not None
 
 
@@ -65,10 +73,15 @@ def test_csrf_required_for_form_posts(monkeypatch):
     # CSRF should be enforced for form POSTS; simulate a POST without token
     with temp_env({"FLASK_ENV": "development", "FLASK_SECRET_KEY": None}):
         from importlib import reload
+        import sys
 
-        import kaicad.ui.web.app as web
-
-        app = reload(web).create_app()
+        web_module = sys.modules.get('kaicad.ui.web.app')
+        if web_module:
+            web_module = reload(web_module)
+        else:
+            import kaicad.ui.web.app as web_module
+            
+        app = web_module.create_app()
         client = app.test_client()
 
         # If CSRF not enabled (flask-wtf missing), skip this test
@@ -88,10 +101,15 @@ def test_csrf_header_required_for_json_endpoints(monkeypatch):
     # JSON endpoints require X-CSRFToken header when CSRF enabled
     with temp_env({"FLASK_ENV": "development", "FLASK_SECRET_KEY": None}):
         from importlib import reload
+        import sys
 
-        import kaicad.ui.web.app as web
-
-        app = reload(web).create_app()
+        web_module = sys.modules.get('kaicad.ui.web.app')
+        if web_module:
+            web_module = reload(web_module)
+        else:
+            import kaicad.ui.web.app as web_module
+            
+        app = web_module.create_app()
         client = app.test_client()
 
         # If CSRF not enabled (flask-wtf missing), skip this test

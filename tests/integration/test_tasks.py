@@ -12,11 +12,12 @@ def test_run_erc():
     test_sch = Path("/test/schematic.kicad_sch")
     expected_out = Path("/test/schematic.erc.txt")
 
-    with patch("sidecar.tasks.subprocess.run") as mock_run:
+    with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
         run_erc(test_sch)
 
         mock_run.assert_called_once_with(
-            ["kicad-cli", "sch", "erc", str(test_sch), "-o", str(expected_out), "--format", "report"], check=False
+            ["kicad-cli", "sch", "erc", str(test_sch), "-o", str(expected_out), "--format", "report"], 
+            check=True, capture_output=True, text=True
         )
 
 
@@ -25,11 +26,12 @@ def test_export_netlist():
     test_sch = Path("/test/circuit.kicad_sch")
     expected_out = Path("/test/circuit.net")
 
-    with patch("sidecar.tasks.subprocess.run") as mock_run:
+    with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
         export_netlist(test_sch)
 
         mock_run.assert_called_once_with(
-            ["kicad-cli", "sch", "export", "netlist", str(test_sch), "-o", str(expected_out)], check=False
+            ["kicad-cli", "sch", "export", "netlist", str(test_sch), "-o", str(expected_out)], 
+            check=True, capture_output=True, text=True
         )
 
 
@@ -38,11 +40,12 @@ def test_export_pdf():
     test_sch = Path("/test/design.kicad_sch")
     expected_out = Path("/test/design.pdf")
 
-    with patch("sidecar.tasks.subprocess.run") as mock_run:
+    with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
         export_pdf(test_sch)
 
         mock_run.assert_called_once_with(
-            ["kicad-cli", "sch", "export", "pdf", str(test_sch), "-o", str(expected_out)], check=False
+            ["kicad-cli", "sch", "export", "pdf", str(test_sch), "-o", str(expected_out)], 
+            check=True, capture_output=True, text=True
         )
 
 
@@ -52,7 +55,7 @@ def test_run_erc_with_tempfile():
         test_sch = Path(tmpdir) / "test.kicad_sch"
         test_sch.touch()
 
-        with patch("sidecar.tasks.subprocess.run") as mock_run:
+        with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
             run_erc(test_sch)
 
             # Verify output path construction
@@ -69,7 +72,7 @@ def test_export_netlist_with_tempfile():
         test_sch = Path(tmpdir) / "circuit.kicad_sch"
         test_sch.touch()
 
-        with patch("sidecar.tasks.subprocess.run") as mock_run:
+        with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
             export_netlist(test_sch)
 
             call_args = mock_run.call_args[0][0]
@@ -84,7 +87,7 @@ def test_export_pdf_with_tempfile():
         test_sch = Path(tmpdir) / "design.kicad_sch"
         test_sch.touch()
 
-        with patch("sidecar.tasks.subprocess.run") as mock_run:
+        with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
             export_pdf(test_sch)
 
             call_args = mock_run.call_args[0][0]
@@ -93,19 +96,25 @@ def test_export_pdf_with_tempfile():
             assert ".pdf" in call_args[6]
 
 
-def test_all_tasks_use_check_false():
-    """Test that all tasks use check=False to not raise on kicad-cli errors."""
+def test_all_tasks_use_check_true():
+    """Test that all tasks use check=True to raise on kicad-cli errors (Bug #3 fix)."""
     test_sch = Path("/test/test.kicad_sch")
 
-    with patch("sidecar.tasks.subprocess.run") as mock_run:
+    with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
         run_erc(test_sch)
-        assert mock_run.call_args[1]["check"] is False
+        assert mock_run.call_args[1]["check"] is True
+        assert mock_run.call_args[1]["capture_output"] is True
+        assert mock_run.call_args[1]["text"] is True
 
         export_netlist(test_sch)
-        assert mock_run.call_args[1]["check"] is False
+        assert mock_run.call_args[1]["check"] is True
+        assert mock_run.call_args[1]["capture_output"] is True
+        assert mock_run.call_args[1]["text"] is True
 
         export_pdf(test_sch)
-        assert mock_run.call_args[1]["check"] is False
+        assert mock_run.call_args[1]["check"] is True
+        assert mock_run.call_args[1]["capture_output"] is True
+        assert mock_run.call_args[1]["text"] is True
 
 
 def test_tasks_handle_different_extensions():
@@ -113,7 +122,7 @@ def test_tasks_handle_different_extensions():
     # Test with .sch extension
     old_sch = Path("/test/old_format.sch")
 
-    with patch("sidecar.tasks.subprocess.run") as mock_run:
+    with patch("kaicad.kicad.tasks.subprocess.run") as mock_run:
         run_erc(old_sch)
         call_args = mock_run.call_args[0][0]
         # Check that output has .erc.txt extension (path separators may vary by platform)

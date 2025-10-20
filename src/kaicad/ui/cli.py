@@ -25,7 +25,7 @@ except Exception:
 console = Console()
 
 
-def print_diagnostics(diagnostics):
+def print_diagnostics(diagnostics: list) -> None:
     """Print diagnostics in a formatted table"""
     if not diagnostics:
         return
@@ -74,7 +74,7 @@ def apply_and_validate(sch_path: Path, plan: Plan, dry_run: bool = False):
     export_pdf(sch_path)
 
 
-def main():
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="kAIcad CLI - AI-powered KiCad schematic editor")

@@ -36,7 +36,7 @@ def temp_project_dir():
 def test_app_exists():
     """Test that Flask app is created."""
     assert app is not None
-    assert app.name == "sidecar.web"
+    assert app.name == "kaicad.ui.web.app"
 
 
 def test_app_testing_mode(client):
@@ -78,7 +78,7 @@ def test_index_route_post_with_project(client, temp_project_dir):
 
 def test_load_current_project_no_file():
     """Test loading project when no file exists."""
-    with patch("sidecar.web.CURRENT_PROJECT_FILE") as mock_file:
+    with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE") as mock_file:
         mock_file.exists.return_value = False
 
         result = _load_current_project()
@@ -93,7 +93,7 @@ def test_load_current_project_with_file():
         project_file = Path(tmpdir) / "current_project.json"
         project_file.write_text(json.dumps({"project_path": "/path/to/project"}))
 
-        with patch("sidecar.web.CURRENT_PROJECT_FILE", project_file):
+        with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE", project_file):
             result = _load_current_project()
 
             assert result == "/path/to/project"
@@ -104,7 +104,7 @@ def test_save_current_project():
     with tempfile.TemporaryDirectory() as tmpdir:
         project_file = Path(tmpdir) / "current_project.json"
 
-        with patch("sidecar.web.CURRENT_PROJECT_FILE", project_file):
+        with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE", project_file):
             _save_current_project("/test/path")
 
             assert project_file.exists()
@@ -118,7 +118,7 @@ def test_load_current_project_corrupt_file():
         project_file = Path(tmpdir) / "current_project.json"
         project_file.write_text("{ invalid json }")
 
-        with patch("sidecar.web.CURRENT_PROJECT_FILE", project_file):
+        with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE", project_file):
             # Also need to clear the environment variable fallback
             with patch.dict(os.environ, {"KAICAD_PROJECT": ""}, clear=False):
                 result = _load_current_project()
@@ -132,7 +132,7 @@ def test_save_current_project_sets_env_var():
     with tempfile.TemporaryDirectory() as tmpdir:
         project_file = Path(tmpdir) / "current_project.json"
 
-        with patch("sidecar.web.CURRENT_PROJECT_FILE", project_file):
+        with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE", project_file):
             _save_current_project("/test/project")
 
             assert os.environ.get("KAICAD_PROJECT") == "/test/project"
@@ -151,7 +151,7 @@ def test_debug_schematic_route_with_project(client, temp_project_dir):
     sch_path = temp_project_dir / "test.kicad_sch"
     sch_path.write_text("(kicad_sch (version 20231120))")
 
-    with patch("sidecar.web._load_current_project", return_value=str(sch_path)):
+    with patch("kaicad.ui.web.app._load_current_project", return_value=str(sch_path)):
         response = client.get("/debug_schematic")
 
         assert response.status_code in [200, 400, 500]
@@ -198,10 +198,11 @@ def test_send_chat_route_post_no_message(client):
     """Test send_chat POST without message."""
     response = client.post("/send_chat", json={})
 
-    # Should return 200 with error in JSON
-    assert response.status_code == 200
+    # Should return 400 with validation error (Bug #7 fix - input validation)
+    assert response.status_code == 400
     data = json.loads(response.data)
     assert data.get("success") is False
+    assert "error" in data
 
 
 def test_send_chat_route_post_with_message(client):
@@ -249,7 +250,7 @@ def test_app_template_folder_configured():
 
 def test_load_current_project_respects_env_var():
     """Test that load falls back to environment variable."""
-    with patch("sidecar.web.CURRENT_PROJECT_FILE") as mock_file:
+    with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE") as mock_file:
         mock_file.exists.return_value = False
 
         with patch.dict(os.environ, {"KAICAD_PROJECT": "/env/project"}):
@@ -298,7 +299,7 @@ def test_project_persistence_across_requests(client, temp_project_dir):
     sch_path.write_text("(kicad_sch (version 20231120))")
 
     # Save project
-    with patch("sidecar.web.CURRENT_PROJECT_FILE") as mock_file:
+    with patch("kaicad.ui.web.app.CURRENT_PROJECT_FILE") as mock_file:
         mock_file.exists.return_value = False
         _save_current_project(str(sch_path))
 

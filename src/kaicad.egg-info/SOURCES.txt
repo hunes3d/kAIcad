@@ -1,0 +1,10 @@
+LICENSE
+README.md
+pyproject.toml
+src/kaicad/__init__.py
+src/kaicad.egg-info/PKG-INFO
+src/kaicad.egg-info/SOURCES.txt
+src/kaicad.egg-info/dependency_links.txt
+src/kaicad.egg-info/entry_points.txt
+src/kaicad.egg-info/requires.txt
+src/kaicad.egg-info/top_level.txt

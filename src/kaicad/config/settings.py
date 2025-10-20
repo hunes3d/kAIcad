@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
+import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+logger = logging.getLogger("kaicad.config.settings")
 
 try:
     import keyring
@@ -46,6 +50,10 @@ class Settings:
     openai_api_key: str = ""
     default_project: str = str(Path.cwd())
     dock_right: bool = True
+    
+    def __post_init__(self) -> None:
+        """Initialize thread lock for thread-safe operations"""
+        self._lock = threading.RLock()
 
     @classmethod
     def load(cls) -> "Settings":
@@ -91,28 +99,30 @@ class Settings:
         )
 
     def save(self) -> None:
-        """Save settings to config file and keyring"""
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        """Save settings to config file and keyring (thread-safe)"""
+        with self._lock:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Save API key to keyring if available
-        if KEYRING_AVAILABLE and self.openai_api_key:
-            try:
-                keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, self.openai_api_key)
-            except Exception as e:
-                print(f"Warning: Failed to save API key to keyring: {e}", file=sys.stderr)
+            # Save API key to keyring if available
+            if KEYRING_AVAILABLE and self.openai_api_key:
+                try:
+                    keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, self.openai_api_key)
+                except Exception as e:
+                    logger.warning(f"Failed to save API key to keyring: {e}")
 
-        # Save other settings to config file (exclude API key if using keyring)
-        config_data = asdict(self)
-        if KEYRING_AVAILABLE and self.openai_api_key:
-            # Don't store API key in plain text if keyring is available
-            config_data["openai_api_key"] = ""
+            # Save other settings to config file (exclude API key if using keyring)
+            config_data = asdict(self)
+            if KEYRING_AVAILABLE and self.openai_api_key:
+                # Don't store API key in plain text if keyring is available
+                config_data["openai_api_key"] = ""
 
-        CONFIG_PATH.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
+            CONFIG_PATH.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
 
     def apply_env(self) -> None:
-        """Apply settings to environment variables"""
-        if self.openai_model:
-            os.environ["OPENAI_MODEL"] = self.openai_model
-        os.environ["OPENAI_TEMPERATURE"] = str(self.openai_temperature)
-        if self.openai_api_key:
-            os.environ["OPENAI_API_KEY"] = self.openai_api_key
+        """Apply settings to environment variables (thread-safe)"""
+        with self._lock:
+            if self.openai_model:
+                os.environ["OPENAI_MODEL"] = self.openai_model
+            os.environ["OPENAI_TEMPERATURE"] = str(self.openai_temperature)
+            if self.openai_api_key:
+                os.environ["OPENAI_API_KEY"] = self.openai_api_key

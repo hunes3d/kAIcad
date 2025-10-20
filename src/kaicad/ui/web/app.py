@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -26,9 +27,14 @@ from kaicad.core.planner import plan_from_prompt
 from kaicad.schema.plan import Plan
 from kaicad.kicad.tasks import export_netlist, export_pdf, run_erc
 from kaicad.core.writer import apply_plan
+from kaicad.utils.validation import validate_project_path, validate_model_name, validate_prompt
+from kaicad.utils.constants import MAX_RECENT_PROJECTS, ATTACHMENT_PREVIEW_LENGTH, MAX_DISPLAYED_SYMBOLS, MAX_DISPLAYED_NETS, MAX_DISPLAYED_CONNECTIONS
 from skip.eeschema import schematic as sch  # type: ignore
 
 load_dotenv()
+
+# Configure logging
+logger = logging.getLogger("kaicad.ui.web")
 
 # Configure template folder to be in the web package
 template_folder = Path(__file__).parent / "templates"
@@ -45,7 +51,7 @@ try:
 
     csrf = CSRFProtect()
 except ImportError:
-    print("WARNING: flask-wtf not installed. CSRF protection disabled.", file=__import__("sys").stderr)
+    logger.warning("flask-wtf not installed. CSRF protection disabled.")
 
 # Track if app has been configured
 _app_configured = False
@@ -71,7 +77,7 @@ def _configure_security(app: Flask) -> None:
                 "  export FLASK_ENV=development"
             )
         else:
-            print("WARNING: Using default secret key in development mode", file=__import__("sys").stderr)
+            logger.warning("Using default secret key in development mode")
             secret_key = "dev-secret-" + __import__("secrets").token_hex(16)
     app.secret_key = secret_key
 
@@ -101,29 +107,32 @@ def _load_current_project() -> Optional[str]:
     """Load the currently active project path"""
     if CURRENT_PROJECT_FILE.exists():
         try:
-            data = json.loads(CURRENT_PROJECT_FILE.read_text())
+            data = json.loads(CURRENT_PROJECT_FILE.read_text(encoding="utf-8"))
             return data.get("project_path")
         except Exception as e:
-            print(f"[ERROR] Failed to load current project: {e}", file=__import__("sys").stderr)
+            logger.error(f"Failed to load current project: {e}")
     return os.getenv("KAICAD_PROJECT", "")
 
 
 def _save_current_project(project_path: str) -> None:
     """Save the currently active project path"""
     try:
-        CURRENT_PROJECT_FILE.write_text(json.dumps({"project_path": project_path}, indent=2))
+        CURRENT_PROJECT_FILE.write_text(
+            json.dumps({"project_path": project_path}, indent=2),
+            encoding="utf-8"
+        )
         os.environ["KAICAD_PROJECT"] = project_path
     except Exception as e:
-        print(f"[ERROR] Failed to save current project: {e}", file=__import__("sys").stderr)
+        logger.error(f"Failed to save current project: {e}")
 
 
 def _load_chat_history() -> List[dict]:
     """Load chat history from file"""
     if CHAT_HISTORY_FILE.exists():
         try:
-            return json.loads(CHAT_HISTORY_FILE.read_text())
+            return json.loads(CHAT_HISTORY_FILE.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"[ERROR] Failed to load chat history: {e}", file=__import__("sys").stderr)
+            logger.error(f"Failed to load chat history: {e}")
             return []
     return []
 
@@ -131,18 +140,18 @@ def _load_chat_history() -> List[dict]:
 def _save_chat_history(history: List[dict]) -> None:
     """Save chat history to file"""
     try:
-        CHAT_HISTORY_FILE.write_text(json.dumps(history, indent=2))
+        CHAT_HISTORY_FILE.write_text(json.dumps(history, indent=2), encoding="utf-8")
     except Exception as e:
-        print(f"[ERROR] Failed to save chat history: {e}", file=__import__("sys").stderr)
+        logger.error(f"Failed to save chat history: {e}")
 
 
 def _load_plan_history() -> List[dict]:
     """Load plan generation history from file"""
     if PLAN_HISTORY_FILE.exists():
         try:
-            return json.loads(PLAN_HISTORY_FILE.read_text())
+            return json.loads(PLAN_HISTORY_FILE.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"[ERROR] Failed to load plan history: {e}", file=__import__("sys").stderr)
+            logger.error(f"Failed to load plan history: {e}")
             return []
     return []
 
@@ -150,16 +159,16 @@ def _load_plan_history() -> List[dict]:
 def _save_plan_history(history: List[dict]) -> None:
     """Save plan generation history to file"""
     try:
-        PLAN_HISTORY_FILE.write_text(json.dumps(history, indent=2))
+        PLAN_HISTORY_FILE.write_text(json.dumps(history, indent=2), encoding="utf-8")
     except Exception as e:
-        print(f"[ERROR] Failed to save plan history: {e}", file=__import__("sys").stderr)
+        logger.error(f"Failed to save plan history: {e}")
 
 
 def _load_api_key() -> Optional[str]:
     """Load API key from file"""
     if API_KEY_FILE.exists():
         try:
-            data = json.loads(API_KEY_FILE.read_text())
+            data = json.loads(API_KEY_FILE.read_text(encoding="utf-8"))
             return data.get("key")
         except:
             return None
@@ -169,7 +178,7 @@ def _load_api_key() -> Optional[str]:
 
 def _save_api_key(api_key: str) -> None:
     """Save API key to file"""
-    API_KEY_FILE.write_text(json.dumps({"key": api_key}, indent=2))
+    API_KEY_FILE.write_text(json.dumps({"key": api_key}, indent=2), encoding="utf-8")
     # Also set in environment for current session
     os.environ["OPENAI_API_KEY"] = api_key
 
@@ -178,7 +187,8 @@ def _mask_api_key(api_key: Optional[str]) -> str:
     """Mask API key for display"""
     if not api_key:
         return ""
-    if len(api_key) <= 8:
+    # Need at least 12 characters to show 7****4 format
+    if len(api_key) <= 11:
         return "****"
     return api_key[:7] + "****" + api_key[-4:]
 
@@ -187,7 +197,7 @@ def _load_recent_projects() -> List[dict]:
     """Load recent projects from file"""
     if RECENT_PROJECTS_FILE.exists():
         try:
-            data = json.loads(RECENT_PROJECTS_FILE.read_text())
+            data = json.loads(RECENT_PROJECTS_FILE.read_text(encoding="utf-8"))
             # Handle old format (list of strings) and new format (list of dicts)
             if data and isinstance(data[0], str):
                 # Convert old format to new format
@@ -208,9 +218,9 @@ def _save_recent_project(project_path: str, project_name: str) -> None:
 
     # Add to front
     recent.insert(0, new_entry)
-    # Keep only last 10
-    recent = recent[:10]
-    RECENT_PROJECTS_FILE.write_text(json.dumps(recent, indent=2))
+    # Keep only last MAX_RECENT_PROJECTS
+    recent = recent[:MAX_RECENT_PROJECTS]
+    RECENT_PROJECTS_FILE.write_text(json.dumps(recent, indent=2), encoding="utf-8")
 
 
 def _launch_kicad(sch_path: Path) -> bool:
@@ -241,7 +251,7 @@ def _launch_kicad(sch_path: Path) -> bool:
             subprocess.Popen(["kicad", str(sch_path)], shell=False)
             return True
     except Exception as e:
-        print(f"Failed to launch KiCad: {e}")
+        logger.error(f"Failed to launch KiCad: {e}")
         return False
 
 
@@ -258,17 +268,17 @@ def _discover_schematic(proj: Path) -> Optional[Path]:
             if sch_path.exists():
                 return sch_path
             # If not found, look for any .kicad_sch in the same directory
-            return next(proj.parent.glob("*.kicad_sch"))
+            return next(proj.parent.glob("*.kicad_sch"), None)  # Safe: default to None
         elif proj.is_dir():
             # If it's a directory, look for any .kicad_sch
-            return next(proj.glob("*.kicad_sch"))
+            return next(proj.glob("*.kicad_sch"), None)  # Safe: default to None
         return None
     except StopIteration:
         return None
 
 
 @app.route("/debug_schematic", methods=["GET"])
-def debug_schematic():
+def debug_schematic() -> tuple:
     """Debug endpoint to check schematic loading status"""
     try:
         last_proj = _load_current_project()
@@ -316,7 +326,7 @@ def debug_schematic():
 
 
 @app.route("/generate_description", methods=["POST"])
-def generate_description():
+def generate_description() -> tuple:
     """Use AI to generate or expand a plan description"""
     try:
         data = request.get_json()
@@ -376,37 +386,44 @@ Provide a clear, actionable description for implementing this in KiCad (2-3 sent
 
 
 @app.route("/send_chat", methods=["POST"])
-def send_chat():
+def send_chat() -> tuple:
     """Handle chat messages via AJAX"""
     try:
-        print("[DEBUG] Received chat request")
+        logger.debug("Received chat request")
         data = request.get_json()
         message = data.get("message", "").strip()
         chat_model = data.get("chat_model", "gpt-4")  # Use gpt-4 as default for chat
 
-        # Validate model
+        # Validate message
+        is_valid_msg, msg_error = validate_prompt(message, max_length=5000)
+        if not is_valid_msg:
+            return jsonify({"success": False, "error": msg_error}), 400
+
+        # Validate model name format
+        is_valid_model, model_error = validate_model_name(chat_model)
+        if not is_valid_model:
+            return jsonify({"success": False, "error": f"Invalid model name: {model_error}"}), 400
+
+        # Validate model is supported
         if not is_model_supported(chat_model):
             return jsonify(
                 {
                     "success": False,
                     "error": f"Model '{chat_model}' is not supported. Supported models: {', '.join(list_supported_models())}",
                 }
-            )
+            ), 400
 
         # Get real model name (handle aliases)
         chat_model = get_real_model_name(chat_model)
 
-        print(f"[DEBUG] Message: {message[:50]}... Model: {chat_model}")
-
-        if not message:
-            return jsonify({"success": False, "message": "Empty message"})
+        logger.debug(f"Message: {message[:50]}... Model: {chat_model}")
 
         api_key = _load_api_key()
         if not api_key:
-            print("[DEBUG] No API key found")
+            logger.debug("No API key found")
             return jsonify({"success": False, "message": "API key not configured"})
 
-        print("[DEBUG] Loading chat history")
+        logger.debug("Loading chat history")
         # Load chat history and add user message
         chat_history = _load_chat_history()
         chat_history.append({"role": "user", "content": message})
@@ -418,24 +435,24 @@ def send_chat():
         sch_path = None
         schematic_info = None
 
-        print(f"[DEBUG] Current project: {last_proj}")
+        logger.debug(f"Current project: {last_proj}")
 
         if last_proj:
             try:
                 proj = Path(last_proj).expanduser().resolve()
-                print(f"[DEBUG] Resolved project path: {proj}")
-                print(f"[DEBUG] Path exists: {proj.exists()}")
-                print(f"[DEBUG] Is file: {proj.is_file()}")
-                print(f"[DEBUG] Is directory: {proj.is_dir()}")
+                logger.debug(f"Resolved project path: {proj}")
+                logger.debug(f"Path exists: {proj.exists()}")
+                logger.debug(f"Is file: {proj.is_file()}")
+                logger.debug(f"Is directory: {proj.is_dir()}")
 
                 if proj.exists():
                     sch_path = _discover_schematic(proj)
-                    print(f"[DEBUG] Discovered schematic: {sch_path}")
+                    logger.debug(f"Discovered schematic: {sch_path}")
 
                     if sch_path:
                         sch_name = sch_path.name
                         project_name = sch_path.stem
-                        print(f"[DEBUG] Schematic name: {sch_name}, Project: {project_name}")
+                        logger.debug(f"Schematic name: {sch_name}, Project: {project_name}")
 
                         # If user is asking about the schematic, load actual data
                         inspect_keywords = [
@@ -468,11 +485,11 @@ def send_chat():
                             or asking_about_net
                         ):
                             try:
-                                print(f"[DEBUG] Inspecting schematic: {sch_path}")
+                                logger.debug(f"Inspecting schematic: {sch_path}")
 
                                 # Check for specific component reference queries
                                 if ref_matches:
-                                    print(f"[DEBUG] Found component references: {ref_matches}")
+                                    logger.debug(f"Found component references: {ref_matches}")
                                     component_details = []
                                     for ref in ref_matches[:5]:  # Limit to first 5 refs
                                         comp_info = find_component_by_reference(sch_path, ref)
@@ -485,7 +502,7 @@ def send_chat():
                                             "components": component_details,
                                             "query_refs": ref_matches,
                                         }
-                                        print(f"[DEBUG] Found {len(component_details)} components")
+                                        logger.debug(f"Found {len(component_details)} components")
                                     else:
                                         schematic_info = {
                                             "type": "component_lookup",
@@ -510,7 +527,7 @@ def send_chat():
                                             "net": net_info,
                                             "net_name": net_name,
                                         }
-                                        print(f"[DEBUG] Inspected net: {net_name}")
+                                        logger.debug(f"Inspected net: {net_name}")
                                     else:
                                         # Just do regular inspection and include net list
                                         inspection = inspect_schematic(sch_path)
@@ -559,25 +576,25 @@ def send_chat():
                                             "symbols_count": inspection["stats"]["total_components"],
                                             "symbols": inspection["components"][:20],
                                             "nets": inspection["nets"][:15],
-                                            "labels": inspection.get("labels", [])[:10],
+                                            "labels": inspection.get("labels", [])[:MAX_DISPLAYED_SYMBOLS],
                                         }
                                     else:
                                         schematic_info = {"error": inspection.get("error"), "path": str(sch_path)}
 
-                                print(f"[DEBUG] Inspection complete: {schematic_info.get('symbols_count', 0)} symbols")
+                                logger.debug(f"Inspection complete: {schematic_info.get('symbols_count', 0)} symbols")
 
                             except Exception as e:
-                                print(f"[DEBUG] Failed to inspect schematic: {e}")
+                                logger.debug(f"Failed to inspect schematic: {e}")
                                 import traceback
 
                                 traceback.print_exc()
                                 schematic_info = {"error": str(e), "path": str(sch_path)}
                     else:
-                        print(f"[DEBUG] No schematic discovered from path: {proj}")
+                        logger.debug(f"No schematic discovered from path: {proj}")
                 else:
-                    print(f"[DEBUG] Project path does not exist: {proj}")
+                    logger.debug(f"Project path does not exist: {proj}")
             except Exception as e:
-                print(f"[DEBUG] Error processing project path: {e}")
+                logger.debug(f"Error processing project path: {e}")
                 import traceback
 
                 traceback.print_exc()
@@ -622,12 +639,12 @@ Current context:"""
                     if net_info.get("success"):
                         system_prompt += f"\n\n🔌 Net '{schematic_info['net_name']}' Details:"
                         system_prompt += f"\n- Connected components: {len(net_info['connections'])}"
-                        for conn in net_info["connections"][:10]:
+                        for conn in net_info["connections"][:MAX_DISPLAYED_CONNECTIONS]:
                             system_prompt += f"\n  - {conn['component']}: pin {conn['pin_number']} ({conn['pin_name']})"
                         system_prompt += "\n\n➡️ Explain this net's function and connections"
                     else:
                         system_prompt += f"\n- ⚠️ Net '{schematic_info['net_name']}' not found"
-                        system_prompt += f"\n- Available nets: {', '.join(net_info.get('available_nets', [])[:10])}"
+                        system_prompt += f"\n- Available nets: {', '.join(net_info.get('available_nets', [])[:MAX_DISPLAYED_NETS])}"
                 elif schematic_info.get("type") == "nets_list":
                     # User asked about nets in general
                     system_prompt += "\n\n🔌 Network Analysis:"
@@ -655,12 +672,12 @@ Current context:"""
                     # Component list
                     if schematic_info.get("symbols"):
                         system_prompt += "\n- Parts: " + ", ".join(
-                            [f"{s['ref']}={s['value']}" for s in schematic_info["symbols"][:10]]
+                            [f"{s['ref']}={s['value']}" for s in schematic_info["symbols"][:MAX_DISPLAYED_SYMBOLS]]
                         )
 
                     # Nets and labels
                     if schematic_info.get("nets"):
-                        system_prompt += f"\n- Nets: {', '.join(schematic_info['nets'][:8])}"
+                        system_prompt += f"\n- Nets: {', '.join(schematic_info['nets'][:MAX_DISPLAYED_NETS])}"
                     if schematic_info.get("labels"):
                         system_prompt += f"\n- Labels: {len(schematic_info['labels'])} net labels present"
         else:
@@ -694,16 +711,16 @@ Rules:
         assistant_message = completion.choices[0].message.content
         chat_history.append({"role": "assistant", "content": assistant_message})
 
-        print(f"[DEBUG] Got response: {assistant_message[:100]}...")
+        logger.debug(f"Got response: {assistant_message[:ATTACHMENT_PREVIEW_LENGTH]}...")
 
         # Save updated history
         _save_chat_history(chat_history)
 
-        print("[DEBUG] Sending success response")
+        logger.debug("Sending success response")
         return jsonify({"success": True, "user_message": message, "assistant_message": assistant_message})
 
     except Exception as e:
-        print(f"[DEBUG] Error in send_chat: {e}")
+        logger.error(f"Error in send_chat: {e}", exc_info=True)
         import traceback
 
         traceback.print_exc()
@@ -711,7 +728,7 @@ Rules:
 
 
 @app.route("/", methods=["GET", "POST"])
-def index():
+def index() -> str:
     # Persist last used project folder in persistent file
     last_proj = _load_current_project()
     project = last_proj
@@ -776,8 +793,29 @@ def index():
                 chat_history=chat_history,
             )
 
-        project = request.form.get("project") or project
-        proj = Path(project).expanduser().resolve()
+        project_input = request.form.get("project") or project
+        
+        # Validate project path
+        is_valid, error_msg, validated_path = validate_project_path(project_input)
+        if not is_valid:
+            flash(f"Invalid project path: {error_msg}", "error")
+            return render_template(
+                "index.html",
+                project=project,
+                recent_projects=recent_projects,
+                available_models=available_models,
+                current_model=current_model,
+                chat_models=chat_models,
+                current_chat_model=current_chat_model,
+                has_api_key=has_api_key,
+                api_key_masked=api_key_masked,
+                project_name=project_name,
+                sch_name=sch_name,
+                chat_history=chat_history,
+            )
+        
+        project = str(validated_path)
+        proj = validated_path
         sch_path = _discover_schematic(proj)
         if not sch_path:
             flash("No .kicad_sch found. Please select a valid .kicad_pro file or project folder.", "error")
@@ -1023,7 +1061,7 @@ def create_app() -> Flask:
     return app
 
 
-def main():
+def main() -> None:
     """Entry point for kaicad-web console script"""
     import argparse
 
@@ -1036,11 +1074,11 @@ def main():
 
     # Security check is now handled at app initialization
     if args.serve and not args.dev:
-        print(f"[kAIcad Web] Starting in production mode on {args.host}:{args.port}")
+        logger.info(f"Starting in production mode on {args.host}:{args.port}")
         app.run(host=args.host, port=args.port, debug=False)
     else:
         mode = "development (--dev)" if args.dev else "development (default)"
-        print(f"[kAIcad Web] Starting in {mode} on http://{args.host}:{args.port}")
+        logger.info(f"Starting in {mode} on http://{args.host}:{args.port}")
         app.run(host=args.host, port=args.port, debug=True)
 
 

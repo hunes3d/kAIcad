@@ -15,12 +15,12 @@ def run_cmd(args: list[str]) -> subprocess.CompletedProcess:
 
 
 def test_cli_main_help():
-    cp = run_cmd([sys.executable, "-m", "sidecar.main", "-h"])
+    cp = run_cmd([sys.executable, "-m", "kaicad.ui.cli", "-h"])
     assert cp.returncode == 0
     assert "kAIcad CLI" in cp.stdout
 
 
 def test_cli_web_help():
-    cp = run_cmd([sys.executable, "-m", "sidecar.web", "-h"])
+    cp = run_cmd([sys.executable, "-m", "kaicad.ui.web.app", "-h"])
     assert cp.returncode == 0
     assert "kAIcad Web GUI" in cp.stdout
