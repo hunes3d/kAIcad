@@ -63,7 +63,7 @@ def test_settings_defaults():
     """Test that Settings has correct default values."""
     settings = Settings()
 
-    assert settings.openai_model == "gpt-5-mini"
+    assert settings.openai_model == "gpt-4o-mini"  # Updated to real model name
     assert settings.openai_temperature == 0.0
     assert settings.openai_api_key == ""
     assert settings.default_project == str(Path.cwd())
@@ -100,19 +100,25 @@ def test_settings_load_from_config_file():
         "dock_right": False,
     }
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-        config_path.write_text(json.dumps(config_data), encoding="utf-8")
+    # Remove env var so config file is used
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps(config_data), encoding="utf-8")
 
-        with patch("kaicad.config.settings.CONFIG_PATH", config_path):
-            with patch("kaicad.config.settings.KEYRING_AVAILABLE", False):
-                settings = Settings.load()
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.KEYRING_AVAILABLE", False):
+                    settings = Settings.load()
 
-                assert settings.openai_model == "gpt-4o-mini"
-                assert settings.openai_temperature == 0.5
-                assert settings.openai_api_key == "sk-test-file-key"
-                assert settings.default_project == "/path/to/project"
-                assert settings.dock_right is False
+                    assert settings.openai_model == "gpt-4o-mini"
+                    assert settings.openai_temperature == 0.5
+                    assert settings.openai_api_key == "sk-test-file-key"
+                    assert settings.default_project == "/path/to/project"
+                    assert settings.dock_right is False
+    finally:
+        if old_key:
+            os.environ["OPENAI_API_KEY"] = old_key
 
 
 def test_settings_load_env_overrides_config():
@@ -170,18 +176,24 @@ def test_settings_load_with_keyring():
 
     config_data = {"openai_model": "gpt-4o", "openai_api_key": ""}
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_path = Path(tmpdir) / "config.json"
-        config_path.write_text(json.dumps(config_data), encoding="utf-8")
+    # Remove env var so keyring is used
+    old_key = os.environ.pop("OPENAI_API_KEY", None)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps(config_data), encoding="utf-8")
 
-        with patch("kaicad.config.settings.CONFIG_PATH", config_path):
-            with patch("kaicad.config.settings.keyring") as mock_keyring:
-                mock_keyring.get_password.return_value = "sk-keyring-key"
+            with patch("kaicad.config.settings.CONFIG_PATH", config_path):
+                with patch("kaicad.config.settings.keyring") as mock_keyring:
+                    mock_keyring.get_password.return_value = "sk-keyring-key"
 
-                settings = Settings.load()
+                    settings = Settings.load()
 
-                assert settings.openai_api_key == "sk-keyring-key"
-                mock_keyring.get_password.assert_called_once_with(KEYRING_SERVICE, KEYRING_USERNAME)
+                    assert settings.openai_api_key == "sk-keyring-key"
+                    mock_keyring.get_password.assert_called_once_with(KEYRING_SERVICE, KEYRING_USERNAME)
+    finally:
+        if old_key:
+            os.environ["OPENAI_API_KEY"] = old_key
 
 
 def test_settings_save():
@@ -270,7 +282,7 @@ def test_settings_load_invalid_config_file():
                     # Should not raise, should use defaults
                     settings = Settings.load()
 
-                    assert settings.openai_model == "gpt-5-mini"  # default
+                    assert settings.openai_model == "gpt-4o-mini"  # Updated to real model name
     finally:
         if old_model is not None:
             os.environ["OPENAI_MODEL"] = old_model

@@ -28,14 +28,16 @@
 - ✅ Optional post‑apply: ERC, PDF, and netlist export
 - � Stores API key in your OS keychain when available
 
-## Quick start (Windows, PowerShell)
+## Quick start
+
+### Windows (PowerShell)
 
 Prerequisites:
 - Python 3.10+
 - KiCad 9 CLI on PATH (verify with: `kicad-cli --version`)
 - OpenAI API key
 
-Option A — pipx (recommended):
+#### Option A — pipx (recommended):
 
 ```powershell
 pipx install git+https://github.com/hunes3d/kAIcad.git
@@ -51,7 +53,7 @@ kaicad-desk   # Desktop GUI
 # kaicad      # CLI
 ```
 
-Option B — dev install:
+#### Option B — dev install:
 
 ```powershell
 git clone https://github.com/hunes3d/kAIcad.git
@@ -61,6 +63,51 @@ python -m venv .venv
 pip install -e .
 
 Copy-Item .env.example .env
+# Edit .env to set OPENAI_API_KEY and (optionally) OPENAI_MODEL
+
+python -m kaicad.ui.desktop   # Desktop GUI
+# python -m kaicad.ui.web.app  # Web UI
+# python -m kaicad.ui.cli      # CLI
+```
+
+### macOS / Linux (Bash/Zsh)
+
+Prerequisites:
+- Python 3.10+
+- KiCad 9 CLI on PATH (verify with: `kicad-cli --version`)
+  - macOS: Install KiCad.app, then add to PATH:  
+    `export PATH="/Applications/KiCad/KiCad.app/Contents/MacOS:$PATH"`
+  - Linux: Install via package manager (e.g., `apt install kicad` on Ubuntu/Debian)
+- OpenAI API key
+
+#### Option A — pipx (recommended):
+
+```bash
+pipx install git+https://github.com/hunes3d/kAIcad.git
+
+# Create a .env file (or set env vars) next to your project
+cat > .env << EOF
+OPENAI_API_KEY=sk-your-key
+OPENAI_MODEL=gpt-4o-mini
+FLASK_ENV=development
+EOF
+
+# Launch your preferred UI
+kaicad-desk   # Desktop GUI
+# kaicad-web  # Web UI at http://127.0.0.1:5173
+# kaicad      # CLI
+```
+
+#### Option B — dev install:
+
+```bash
+git clone https://github.com/hunes3d/kAIcad.git
+cd kAIcad
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+cp .env.example .env
 # Edit .env to set OPENAI_API_KEY and (optionally) OPENAI_MODEL
 
 python -m kaicad.ui.desktop   # Desktop GUI
@@ -105,9 +152,28 @@ See `.env.example` for a ready-to-copy template.
 
 ## Tips & troubleshooting
 
-- Web UI exits immediately? Set `FLASK_ENV=development` or provide a secure `FLASK_SECRET_KEY`.
-- KiCad tools not found? Add `C:\\Program Files\\KiCad\\9.0\\bin` to PATH and re-open your shell.
-- Model errors? Try `OPENAI_MODEL=gpt-4o-mini` and ensure your API key is valid.
+### Common issues
+
+- **Web UI exits immediately?**  
+  Set `FLASK_ENV=development` or provide a secure `FLASK_SECRET_KEY`.
+
+- **KiCad tools not found?**  
+  - Windows: Add `C:\Program Files\KiCad\9.0\bin` to PATH and re-open your shell.
+  - macOS: Add KiCad to PATH: `export PATH="/Applications/KiCad/KiCad.app/Contents/MacOS:$PATH"`
+  - Linux: Ensure `kicad-cli` is installed and on PATH (e.g., `which kicad-cli`)
+
+- **Model errors?**  
+  Try `OPENAI_MODEL=gpt-4o-mini` and ensure your API key is valid.
+
+- **Python version issues?**  
+  - Linux/macOS: Use `python3` instead of `python`
+  - Verify version with: `python --version` (or `python3 --version`)
+
+### Platform-specific notes
+
+- **macOS**: The desktop GUI requires Tkinter (included with python.org Python, may need separate install for Homebrew Python)
+- **Linux**: Install `python3-tk` package for desktop GUI support (e.g., `apt install python3-tk` on Ubuntu/Debian)
+- **Windows**: Tkinter is included with standard Python installer
 
 ## Wiki
 

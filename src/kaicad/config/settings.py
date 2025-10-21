@@ -45,8 +45,8 @@ KEYRING_USERNAME = "openai_api_key"
 
 @dataclass
 class Settings:
-    openai_model: str = "gpt-5-mini"
-    openai_temperature: float = 0.0
+    openai_model: str = "gpt-4o-mini"  # Use real model name (efficient and cost-effective)
+    openai_temperature: float = 0.0  # Conservative default for deterministic behavior
     openai_api_key: str = ""
     default_project: str = str(Path.cwd())
     dock_right: bool = True
@@ -68,9 +68,14 @@ class Settings:
         except Exception:
             pass
 
-        # Try to load API key from keyring first
+        # Try to load API key from keyring first (if env var not set)
         api_key = ""
-        if KEYRING_AVAILABLE:
+        
+        # Environment variable takes highest precedence
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        
+        # Fall back to keyring if env var not set
+        if not api_key and KEYRING_AVAILABLE:
             try:
                 stored_key = keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
                 if stored_key:
@@ -78,11 +83,9 @@ class Settings:
             except Exception:
                 pass
 
-        # Fall back to config file or env var
+        # Fall back to config file if still not found
         if not api_key:
             api_key = settings_dict.get("openai_api_key", "")
-        if not api_key:
-            api_key = os.getenv("OPENAI_API_KEY", "")
 
         # Override with env vars if set
         model = os.getenv("OPENAI_MODEL", settings_dict.get("openai_model", cls.openai_model))

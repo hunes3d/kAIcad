@@ -108,8 +108,8 @@ def test_plan_from_prompt_openai_error_fallback():
     pytest.skip("OpenAI import is dynamic - covered by integration tests")
 
 
-def test_plan_from_prompt_model_alias():
-    """Test that model aliases (like gpt-5-mini) are resolved correctly."""
+def test_plan_from_prompt_model_validation():
+    """Test that model names are validated correctly."""
     # Skip complex OpenAI mocking since import is inside try/except
     pytest.skip("OpenAI import is dynamic - covered by integration tests")
 

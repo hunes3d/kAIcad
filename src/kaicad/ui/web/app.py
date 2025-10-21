@@ -23,7 +23,9 @@ from kaicad.core.inspector import (
     search_components,
 )
 from kaicad.core.models import get_default_model, get_real_model_name, is_model_supported, list_supported_models
+from kaicad.core.model_registry import ModelRegistry
 from kaicad.core.planner import plan_from_prompt
+from kaicad.config.settings import Settings
 from kaicad.schema.plan import Plan
 from kaicad.kicad.tasks import export_netlist, export_pdf, run_erc
 from kaicad.core.writer import apply_plan
@@ -44,6 +46,22 @@ project_root = Path.cwd()
 
 app = Flask(__name__, template_folder=str(template_folder))
 
+# Initialize rate limiter for cost protection
+limiter = None
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://",
+    )
+    logger.info("Rate limiting enabled")
+except ImportError:
+    logger.warning("flask-limiter not installed. Rate limiting disabled.")
+
 # Initialize CSRF protection at module level
 csrf = None
 try:
@@ -55,6 +73,22 @@ except ImportError:
 
 # Track if app has been configured
 _app_configured = False
+
+
+def _apply_rate_limit(limit_string: str):
+    """Helper to conditionally apply rate limiting decorator.
+    
+    Args:
+        limit_string: Rate limit string (e.g., "10 per minute")
+    
+    Returns:
+        Decorator function or passthrough if limiter not available
+    """
+    def decorator(func):
+        if limiter:
+            return limiter.limit(limit_string)(func)
+        return func
+    return decorator
 
 
 # Security configuration is deferred to create_app() to avoid import-time failures
@@ -84,9 +118,19 @@ def _configure_security(app: Flask) -> None:
     # Configure Flask-WTF to accept CSRF tokens from both form fields and headers (for AJAX)
     app.config["WTF_CSRF_HEADERS"] = ["X-CSRFToken"]
     app.config["WTF_CSRF_TIME_LIMIT"] = None  # No expiration for development
+    
+    # Disable CSRF in development mode for easier testing
+    if flask_env == "development":
+        app.config["WTF_CSRF_ENABLED"] = False
+        logger.warning("CSRF protection disabled in development mode")
+        
+        # Provide dummy csrf_token function for templates in dev mode
+        @app.context_processor
+        def inject_csrf_token():
+            return dict(csrf_token=lambda: "")
 
     # Initialize CSRF protection with app (only once)
-    if csrf is not None:
+    if csrf is not None and flask_env != "development":
         csrf.init_app(app)
 
     _app_configured = True
@@ -326,6 +370,7 @@ def debug_schematic() -> tuple:
 
 
 @app.route("/generate_description", methods=["POST"])
+@_apply_rate_limit("15 per minute")  # Protect from API credit burns
 def generate_description() -> tuple:
     """Use AI to generate or expand a plan description"""
     try:
@@ -365,6 +410,9 @@ User's idea: {user_input}
 
 Provide a clear, actionable description for implementing this in KiCad (2-3 sentences max):"""
 
+        # Get temperature from Settings (defaults to 0.0 for deterministic behavior)
+        settings = Settings.load()
+        
         completion = client.chat.completions.create(
             model=model,
             messages=[
@@ -375,17 +423,28 @@ Provide a clear, actionable description for implementing this in KiCad (2-3 sent
                 {"role": "user", "content": prompt},
             ],
             max_tokens=200,
-            temperature=0.7,
+            temperature=settings.openai_temperature,
         )
 
         description = completion.choices[0].message.content.strip()
         return jsonify({"success": True, "description": description})
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)})
+        # Log full error server-side only
+        logger.error(f"Failed to generate description: {e}", exc_info=True)
+        
+        # Return friendly error to client
+        from kaicad.ui.web.errors import create_error_response, ErrorCode
+        response, status_code = create_error_response(
+            ErrorCode.PLAN_GENERATION_FAILED,
+            "Failed to generate description. Please try again.",
+            500
+        )
+        return jsonify(response), status_code
 
 
 @app.route("/send_chat", methods=["POST"])
+@_apply_rate_limit("10 per minute")  # Protect from API credit burns
 def send_chat() -> tuple:
     """Handle chat messages via AJAX"""
     try:
@@ -706,7 +765,14 @@ Rules:
 
         messages_to_send = [{"role": "system", "content": system_prompt}] + chat_history
 
-        completion = client.chat.completions.create(model=chat_model, messages=messages_to_send)
+        # Get temperature from Settings (defaults to 0.0 for deterministic behavior)
+        settings = Settings.load()
+        
+        completion = client.chat.completions.create(
+            model=chat_model, 
+            messages=messages_to_send,
+            temperature=settings.openai_temperature
+        )
 
         assistant_message = completion.choices[0].message.content
         chat_history.append({"role": "assistant", "content": assistant_message})
@@ -720,11 +786,17 @@ Rules:
         return jsonify({"success": True, "user_message": message, "assistant_message": assistant_message})
 
     except Exception as e:
+        # Log full error with stack trace server-side only
         logger.error(f"Error in send_chat: {e}", exc_info=True)
-        import traceback
-
-        traceback.print_exc()
-        return jsonify({"success": False, "message": str(e)})
+        
+        # Return friendly error to client (no stack traces!)
+        from kaicad.ui.web.errors import create_error_response, ErrorCode
+        response, status_code = create_error_response(
+            ErrorCode.CHAT_FAILED,
+            "Failed to generate chat response. Please try again.",
+            500
+        )
+        return jsonify(response), status_code
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -744,11 +816,12 @@ def index() -> str:
     has_api_key = bool(api_key)
     api_key_masked = _mask_api_key(api_key) if api_key else ""
 
-    # Model selection (hot-swappable)
-    available_models = ["gpt-5", "gpt-5-mini", "gpt-5-nano"]
-    chat_models = ["gpt-5-pro", "gpt-5", "gpt-5-mini", "gpt-5-nano"]
-    current_model = request.form.get("model", os.getenv("OPENAI_MODEL", "gpt-5-mini"))
-    current_chat_model = request.form.get("chat_model", os.getenv("OPENAI_CHAT_MODEL", "gpt-5"))
+    # Model selection (hot-swappable) - use ModelRegistry for real models
+    available_models = ModelRegistry.get_available_models_for_planning()
+    chat_models = ModelRegistry.get_available_models_for_chat()
+    default_model = ModelRegistry.get_default_model()
+    current_model = request.form.get("model", os.getenv("OPENAI_MODEL", default_model))
+    current_chat_model = request.form.get("chat_model", os.getenv("OPENAI_CHAT_MODEL", default_model))
 
     # Try to detect schematic on initial page load
     if project:
@@ -945,11 +1018,12 @@ Rules:
             prompt = request.form.get("prompt", "")
 
             # Hot-swap model selection and set API key
-            # Warn if user selected gpt-5-pro for plan generation
             model_to_use = current_model
-            if current_model == "gpt-5-pro":
-                flash("Note: gpt-5-pro is only available for chat. Using gpt-5 for plan generation.", "warning")
-                model_to_use = "gpt-5"
+            
+            # Validate model is suitable for planning
+            if not ModelRegistry.is_valid_model(model_to_use):
+                flash(f"Invalid model: {model_to_use}. Using default model.", "warning")
+                model_to_use = ModelRegistry.get_default_model()
 
             os.environ["OPENAI_MODEL"] = model_to_use
             os.environ["OPENAI_API_KEY"] = api_key
@@ -1058,6 +1132,11 @@ Rules:
 
 def create_app() -> Flask:
     _configure_security(app)
+    
+    # Register error handlers for secure error responses
+    from kaicad.ui.web.errors import register_error_handlers
+    register_error_handlers(app)
+    
     return app
 
 

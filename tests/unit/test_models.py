@@ -99,25 +99,16 @@ def test_get_model_config_nonexistent():
     assert config is None
 
 
-def test_get_model_config_aliases():
-    """Test getting config for aliased models."""
-    # gpt-5-mini is an alias for gpt-4o-mini
-    gpt5_mini_config = get_model_config("gpt-5-mini")
-    assert gpt5_mini_config is not None
-    assert gpt5_mini_config.name == "gpt-4o-mini"  # Aliased to real model
+def test_get_model_config_real_models():
+    """Test getting config for real OpenAI models."""
+    # All real models should return correct configs
+    gpt4o_mini_config = get_model_config("gpt-4o-mini")
+    assert gpt4o_mini_config is not None
+    assert gpt4o_mini_config.name == "gpt-4o-mini"
 
-    # gpt-5 is an alias for gpt-4
-    gpt5_config = get_model_config("gpt-5")
-    assert gpt5_config is not None
-    assert gpt5_config.name == "gpt-4"
-
-
-def test_get_real_model_name_for_aliases():
-    """Test resolving aliases to real model names."""
-    # Aliases should resolve to real names
-    assert get_real_model_name("gpt-5-mini") == "gpt-4o-mini"
-    assert get_real_model_name("gpt-5") == "gpt-4"
-    assert get_real_model_name("gpt-5-nano") == "gpt-4o-mini"
+    gpt4_config = get_model_config("gpt-4")
+    assert gpt4_config is not None
+    assert gpt4_config.name == "gpt-4"
 
 
 def test_get_real_model_name_for_real_models():
@@ -125,6 +116,7 @@ def test_get_real_model_name_for_real_models():
     assert get_real_model_name("gpt-4") == "gpt-4"
     assert get_real_model_name("gpt-4o") == "gpt-4o"
     assert get_real_model_name("gpt-4o-mini") == "gpt-4o-mini"
+    assert get_real_model_name("gpt-4-turbo") == "gpt-4-turbo"
 
 
 def test_get_real_model_name_for_unknown():
@@ -135,15 +127,17 @@ def test_get_real_model_name_for_unknown():
 
 def test_is_model_supported():
     """Test checking if models are supported."""
-    # Supported models
+    # Supported models (real OpenAI models only)
     assert is_model_supported("gpt-4") is True
     assert is_model_supported("gpt-4o") is True
     assert is_model_supported("gpt-4o-mini") is True
-    assert is_model_supported("gpt-5-mini") is True
+    assert is_model_supported("gpt-4-turbo") is True
 
-    # Unsupported model
+    # Unsupported models (including removed fantasy models)
     assert is_model_supported("nonexistent") is False
     assert is_model_supported("") is False
+    assert is_model_supported("gpt-5") is False
+    assert is_model_supported("gpt-5-mini") is False
 
 
 def test_list_supported_models():
@@ -153,18 +147,22 @@ def test_list_supported_models():
     assert isinstance(models, list)
     assert len(models) > 0
 
-    # Check some expected models are in the list
+    # Check expected real models are in the list
     assert "gpt-4" in models
     assert "gpt-4o" in models
     assert "gpt-4o-mini" in models
-    assert "gpt-5-mini" in models
+    assert "gpt-4-turbo" in models
+    
+    # Fantasy models should NOT be in the list
+    assert "gpt-5" not in models
+    assert "gpt-5-mini" not in models
 
 
 def test_get_default_model():
     """Test getting the default model."""
     default = get_default_model()
 
-    assert default == "gpt-5-mini"
+    assert default == "gpt-4o-mini"  # Updated to real model
     # Default should be a supported model
     assert is_model_supported(default) is True
 
@@ -247,16 +245,8 @@ def test_validate_model_error_message_includes_alternatives():
     assert "gpt-4" in error_msg or "Supported models" in error_msg
 
 
-def test_model_aliases_point_to_better_models():
-    """Test that aliases like gpt-5-mini point to modern models."""
-    gpt5_mini_real = get_real_model_name("gpt-5-mini")
-
-    # Should resolve to gpt-4o-mini (modern, cheap, fast)
-    assert gpt5_mini_real == "gpt-4o-mini"
-
-
-def test_get_model_config_returns_different_objects():
-    """Test that get_model_config returns the same config object."""
+def test_get_model_config_returns_same_objects():
+    """Test that get_model_config returns the same config object from registry."""
     config1 = get_model_config("gpt-4o")
     config2 = get_model_config("gpt-4o")
 

@@ -65,38 +65,7 @@ _MODEL_REGISTRY: Dict[str, ModelConfig] = {
         context_window=128000,
         cost_per_1k_input=0.00015,
         cost_per_1k_output=0.0006,
-        description="Smallest and fastest, great for simple tasks",
-    ),
-    # Placeholder names for compatibility (map to real models)
-    "gpt-5": ModelConfig(
-        name="gpt-4",
-        max_tokens=8192,
-        supports_json_mode=True,
-        supports_response_format=True,
-        context_window=8192,
-        cost_per_1k_input=0.03,
-        cost_per_1k_output=0.06,
-        description="Alias for gpt-4 (most capable)",
-    ),
-    "gpt-5-mini": ModelConfig(
-        name="gpt-4o-mini",
-        max_tokens=4096,
-        supports_json_mode=True,
-        supports_response_format=True,
-        context_window=128000,
-        cost_per_1k_input=0.00015,
-        cost_per_1k_output=0.0006,
-        description="Alias for gpt-4o-mini (recommended default)",
-    ),
-    "gpt-5-nano": ModelConfig(
-        name="gpt-4o-mini",
-        max_tokens=4096,
-        supports_json_mode=True,
-        supports_response_format=True,
-        context_window=128000,
-        cost_per_1k_input=0.00015,
-        cost_per_1k_output=0.0006,
-        description="Alias for gpt-4o-mini (fastest)",
+        description="Efficient and fast, great for simple tasks (recommended)",
     ),
 }
 
@@ -153,9 +122,9 @@ def get_default_model() -> str:
     """Get the default model name.
 
     Returns:
-        Default model name (gpt-5-mini -> gpt-4o-mini)
+        Default model name (gpt-4o-mini for cost efficiency)
     """
-    return "gpt-5-mini"
+    return "gpt-4o-mini"
 
 
 def validate_model_for_json(model_name: str) -> tuple[bool, str]:

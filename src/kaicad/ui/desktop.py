@@ -17,6 +17,7 @@ from tkinter import filedialog, messagebox, scrolledtext
 from skip.eeschema import schematic as sch  # type: ignore
 
 from kaicad.core.planner import plan_from_prompt
+from kaicad.core.model_registry import ModelRegistry
 from kaicad.schema.plan import Plan
 from kaicad.config.settings import Settings
 from kaicad.kicad.tasks import export_netlist, export_pdf, run_erc
@@ -49,10 +50,10 @@ class SidecarApp:
         # Settings button (top-left)
         tk.Button(top, text="⚙ Settings", command=self.open_settings).pack(side=tk.LEFT)
 
-        # Model selection dropdown (hot-swappable)
+        # Model selection dropdown (hot-swappable) - use ModelRegistry
         tk.Label(top, text="  Model:").pack(side=tk.LEFT, padx=(10, 0))
         self.model_var = tk.StringVar(value=self.settings.openai_model)
-        model_options = ["gpt-5", "gpt-5-mini", "gpt-5-nano"]
+        model_options = ModelRegistry.get_available_models_for_planning()
         self.model_dropdown = tk.OptionMenu(top, self.model_var, *model_options, command=self.on_model_change)
         self.model_dropdown.config(width=15)
         self.model_dropdown.pack(side=tk.LEFT, padx=6)
