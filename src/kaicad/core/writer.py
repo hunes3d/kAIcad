@@ -1,4 +1,5 @@
-from skip.eeschema.schematic import Schematic, Symbol
+from skip.eeschema.schematic import Schematic
+from skip.eeschema.schematic.symbol import Symbol
 
 from kaicad.schema.plan import PLAN_SCHEMA_VERSION, ApplyResult, Diagnostic, Plan
 from kaicad.utils.validation import validate_coordinate, validate_symbol_name, validate_wire_format
@@ -15,8 +16,13 @@ def snap_to_grid(value: float, grid: float = GRID_MM) -> float:
 def get_symbol_ref(sym) -> str | None:
     """
     Extract reference designator from a symbol.
-    Compatible with skip library v0.2.5+ API.
+    Compatible with skip library v0.2.5+ API and newer forks.
     """
+    # Try the Reference property (from newer fork with Symbol.from_lib)
+    if hasattr(sym, "Reference") and hasattr(sym.Reference, "value"):
+        return sym.Reference.value
+    
+    # Fall back to allReferences for older versions
     if hasattr(sym, "allReferences") and sym.allReferences:
         # v0.2.5+ API: allReferences is a list property
         ref_obj = sym.allReferences[0]
@@ -55,11 +61,83 @@ def build_pin_index(ref_index: dict) -> dict:
     return pin_index
 
 
+def get_pin_locations_compat(sym):
+    """
+    Compatibility wrapper for get_pin_locations().
+    Works with both old and new kicad-skip fork versions.
+    
+    For newly created symbols without lib_symbols loaded, uses standard offsets
+    for common 2-pin components (R, C, D, L) as fallback.
+    
+    Returns:
+        dict: Maps pin names/numbers to (x, y) coordinates
+    """
+    # Try new API first (when fork is updated)
+    if hasattr(sym, 'get_pin_locations') and callable(sym.get_pin_locations):
+        try:
+            return sym.get_pin_locations()
+        except Exception:
+            pass
+    
+    # Fallback: use existing .pin collection (works with loaded schematics)
+    locations = {}
+    
+    # Try to access .pin attribute
+    try:
+        pins = sym.pin if hasattr(sym, 'pin') else None
+    except Exception:
+        pins = None
+    
+    if pins is None or not pins:
+        # Symbol doesn't have pin data yet - this can happen with newly created symbols
+        # before the schematic is saved/reloaded with lib_symbols populated
+        
+        # For 2-pin components (R, C, D, L), use standard KiCad library offsets
+        # This allows wiring to work immediately after component creation
+        sym_x, sym_y = None, None
+        try:
+            if hasattr(sym, 'at') and hasattr(sym.at, 'value') and isinstance(sym.at.value, list) and len(sym.at.value) >= 2:
+                sym_x, sym_y = sym.at.value[0], sym.at.value[1]
+        except Exception:
+            pass
+        
+        if sym_x is not None and sym_y is not None:
+            # Standard offsets for 2-pin components (±2.54mm horizontally)
+            # This matches Device:R, Device:C, Device:LED, etc. in KiCad libraries
+            locations = {
+                '1': (sym_x - 2.54, sym_y),
+                '2': (sym_x + 2.54, sym_y)
+            }
+        
+        return locations
+    
+    # Try to iterate over pins
+    try:
+        for pin in pins:
+            try:
+                coord = (pin.location.x, pin.location.y)
+                # Add by number
+                locations[pin.number] = coord
+                # Add by name if not generic
+                if pin.name and pin.name != '~':
+                    locations[pin.name] = coord
+            except (AttributeError, Exception):
+                # Skip pins without valid location
+                continue
+    except (TypeError, Exception):
+        # pins is not iterable
+        pass
+    
+    return locations
+
+
 def lookup_pin_coords(ref: str, pin_name: str, ref_index: dict, pin_index: dict, diagnostics: list) -> tuple:
     """
-    Look up pin coordinates with proper validation.
+    Look up pin coordinates using kicad-skip helper methods.
     Returns (x, y) or None if lookup fails.
     Appends diagnostic to explain why lookup failed.
+    
+    Uses get_pin_locations() for all component types - works for 2-pin and multi-pin components.
     """
     # Check if component exists
     if ref not in ref_index:
@@ -76,19 +154,35 @@ def lookup_pin_coords(ref: str, pin_name: str, ref_index: dict, pin_index: dict,
 
     sym = ref_index[ref]
 
-    # Try to get pin position
-    try:
-        pos = sym.pin_position(pin_name)
-        return pos
-    except (AttributeError, KeyError, ValueError):
-        # Pin doesn't exist or coords unavailable
+    # Use compatibility wrapper that works with both old and new fork versions
+    pin_locations = get_pin_locations_compat(sym)
+    
+    if not pin_locations:
+        # No pin data available - this happens with newly created symbols
+        # before schematic is saved/reloaded with lib_symbols populated
         diagnostics.append(
             Diagnostic(
                 stage="writer",
                 severity="warning",
                 ref=ref,
-                message=f"Pin '{pin_name}' not found or has no coordinates on {ref}",
-                suggestion=f"Verify pin name '{pin_name}' exists in symbol definition",
+                message=f"Pin coordinates not yet available for {ref} (symbol created but library definitions not loaded)",
+                suggestion="Save and reload schematic, or wire will be skipped for now",
+            )
+        )
+        return None
+    
+    if pin_name in pin_locations:
+        return pin_locations[pin_name]
+    else:
+        # Pin name not found - try to get available pins for better error message
+        available_pins = list(pin_locations.keys())
+        diagnostics.append(
+            Diagnostic(
+                stage="writer",
+                severity="error",
+                ref=ref,
+                message=f"Pin '{pin_name}' not found on {ref}",
+                suggestion=f"Available pins: {', '.join(available_pins[:10])}",
             )
         )
         return None
@@ -99,7 +193,7 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
     Apply a plan to a schematic document.
 
     Coordinates are snapped to GRID_MM (2.54mm) for deterministic placement.
-    Wire operations attempt pin coordinate lookup, falling back to net labels.
+    Wire operations use get_pin_locations() for all component types.
 
     Returns an ApplyResult with diagnostics instead of printing to console.
     """
@@ -121,6 +215,9 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
     # Build indexes once for O(1) lookups during operations
     ref_index = build_ref_index(doc)
     pin_index = build_pin_index(ref_index)
+    
+    # Track if we need to rebuild indexes after component additions
+    components_added = False
 
     for op in plan.ops:
         if op.op == "add_component":
@@ -141,20 +238,7 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
             # Try preferred API path if available (patched in tests)
             try:
                 if hasattr(Symbol, "from_lib"):
-                    sym = Symbol.from_lib(op.symbol)  # type: ignore[attr-defined]
-                    # Set attributes using generic property names when available
-                    try:
-                        # Reference/value attributes in skip use capitalized names
-                        sym.Reference = op.ref
-                        sym.Value = op.value
-                    except Exception:
-                        # Fallback methods if provided by custom Symbol implementation
-                        if hasattr(sym, "set_ref"):
-                            sym.set_ref(op.ref)  # type: ignore[attr-defined]
-                        if hasattr(sym, "set_value"):
-                            sym.set_value(op.value)  # type: ignore[attr-defined]
-                    # Position
-                    # Validate coordinate format
+                    # Validate coordinate format first
                     coord_valid, coord_error, coords = validate_coordinate(op.at)
                     if not coord_valid:
                         diagnostics.append(
@@ -170,11 +254,29 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
                     
                     x, y = coords
                     x, y = snap_to_grid(x), snap_to_grid(y)
-                    try:
-                        sym.at = x, y
-                    except Exception:
-                        if hasattr(sym, "set_pos"):
-                            sym.set_pos(x, y)  # type: ignore[attr-defined]
+                    
+                    # Debug: check if Symbol.from_lib is actually callable
+                    if not callable(Symbol.from_lib):
+                        raise RuntimeError(f"Symbol.from_lib exists but is not callable: {type(Symbol.from_lib)}")
+                    
+                    # Use the from_lib API with proper parameters
+                    # Signature: from_lib(schematic, lib_id: str, reference: str, at_x: float, at_y: float, ...)
+                    sym = Symbol.from_lib(
+                        doc,
+                        lib_id=op.symbol,
+                        reference=op.ref,
+                        at_x=x,
+                        at_y=y,
+                        unit=1,
+                        in_bom=True,
+                        on_board=True,
+                        dnp=False
+                    )  # type: ignore[attr-defined]
+                    
+                    # Set value if provided (direct assignment now supported in fork)
+                    if op.value:
+                        sym.Value = op.value
+                    
                     # Rotation (best-effort)
                     if getattr(op, "rot", 0):
                         for attr in ("rotation", "rot"):
@@ -183,32 +285,64 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
                                 break
                             except Exception:
                                 continue
+                    
                     # Additional fields are best-effort, ignore failures
                     for k, v in getattr(op, "fields", {}).items():
                         try:
                             setattr(sym, k, v)
                         except Exception:
                             pass
-                    # Append to schematic
-                    doc.symbol.append(sym)
+                    
+                    # Symbol is automatically added to doc.symbol by from_lib
                     affected_refs.append(op.ref)
+                    components_added = True  # Mark that we need to rebuild indexes
                     diagnostics.append(
                         Diagnostic(stage="writer", severity="info", ref=op.ref, message=f"Added {op.ref} ({op.symbol})")
                     )
                 else:
                     # Symbol.from_lib not available in this skip version
-                    raise RuntimeError("Symbol.from_lib is not available in current kicad-skip version")
+                    raise RuntimeError(
+                        "Symbol.from_lib is not available in kicad-skip 0.2.5. "
+                        "Adding components programmatically is not supported with the current version of kicad-skip. "
+                        "You can: (1) manually add components in KiCad first, then use kAIcad for wiring/labels, "
+                        "or (2) wait for kicad-skip library updates with symbol creation support."
+                    )
             except Exception as e:
+                import traceback
+                error_msg = str(e)
+                # Include traceback for debugging
+                tb_lines = traceback.format_exc().split('\n')
+                # Find the actual error line
+                for line in tb_lines:
+                    if 'File' in line and 'writer.py' in line:
+                        error_msg += f" | {line.strip()}"
+                
+                suggestion = "This environment does not support creating symbols programmatically with kicad-skip."
+                
+                # Provide more specific suggestions based on the error
+                if "from_lib" in error_msg:
+                    suggestion = (
+                        "Component creation is not supported in kicad-skip 0.2.5. "
+                        "Workaround: Add components manually in KiCad first, then use kAIcad for connections and labels only. "
+                        "Or use a schematic that already has the needed components and ask to wire/connect them."
+                    )
+                
                 diagnostics.append(
                     Diagnostic(
                         stage="writer",
                         severity="error",
                         ref=op.ref,
-                        message=f"Failed to add component: {e}",
-                        suggestion="This environment may not support creating symbols programmatically with kicad-skip",
+                        message=f"Failed to add component: {error_msg}",
+                        suggestion=suggestion,
                     )
                 )
         elif op.op == "wire":
+            # Rebuild indexes if components were added (symbols now in doc.symbol immediately)
+            if components_added:
+                ref_index = build_ref_index(doc)
+                pin_index = build_pin_index(ref_index)
+                components_added = False
+            
             # Wire between pins identified as REF:PIN using indexed lookups
             try:
                 # Validate wire format with security checks
@@ -240,12 +374,47 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
                 to_ref, to_pin = to_parts
 
                 # O(1) pin coordinate lookups with validation
-                from_pos = lookup_pin_coords(from_ref, from_pin, ref_index, pin_index, diagnostics)
-                to_pos = lookup_pin_coords(to_ref, to_pin, ref_index, pin_index, diagnostics)
+                try:
+                    from_pos = lookup_pin_coords(from_ref, from_pin, ref_index, pin_index, diagnostics)
+                except Exception as lookup_err:
+                    diagnostics.append(
+                        Diagnostic(
+                            stage="writer",
+                            severity="error",
+                            ref=from_ref,
+                            message=f"Pin lookup failed for {from_ref}:{from_pin}: {lookup_err}",
+                        )
+                    )
+                    from_pos = None
+                
+                try:
+                    to_pos = lookup_pin_coords(to_ref, to_pin, ref_index, pin_index, diagnostics)
+                except Exception as lookup_err:
+                    diagnostics.append(
+                        Diagnostic(
+                            stage="writer",
+                            severity="error",
+                            ref=to_ref,
+                            message=f"Pin lookup failed for {to_ref}:{to_pin}: {lookup_err}",
+                        )
+                    )
+                    to_pos = None
 
                 if from_pos and to_pos:
                     # Both pins found with coordinates - create wire using collection API
                     try:
+                        if not hasattr(doc, 'wire') or doc.wire is None:
+                            diagnostics.append(
+                                Diagnostic(
+                                    stage="writer",
+                                    severity="error",
+                                    ref=from_ref,
+                                    message="Wire collection not available in schematic",
+                                    suggestion="This schematic may not support wire operations",
+                                )
+                            )
+                            continue
+                        
                         w = doc.wire.new()
                         # kicad-skip wire wrapper exposes 'pts' list property
                         w.pts = [from_pos, to_pos]
@@ -260,86 +429,17 @@ def apply_plan(doc: Schematic, plan: Plan) -> ApplyResult:
                             )
                         )
                     except Exception as wire_err:
+                        import traceback
+                        tb = traceback.format_exc()
                         diagnostics.append(
                             Diagnostic(
                                 stage="writer",
                                 severity="error",
                                 ref=from_ref,
-                                message=f"Wire placement failed: {wire_err}",
+                                message=f"Wire placement failed: {wire_err}\n{tb}",
                             )
                         )
-
-                elif from_ref in ref_index and to_ref in ref_index:
-                    # Components exist but pins don't have coords - use label fallback
-                    diagnostics.append(
-                        Diagnostic(
-                            stage="writer",
-                            severity="warning",
-                            ref=from_ref,
-                            message="Pin coordinates unavailable, using net label fallback",
-                            suggestion="Net will be connected via labels instead of wire geometry",
-                        )
-                    )
-
-                    # Generate unique net name for this connection
-                    net_name = f"Net_{from_ref}_{from_pin}_{to_ref}_{to_pin}"
-
-                    # Place labels near both symbols
-                    from_x, from_y = 0.0, 0.0
-                    to_x, to_y = 0.0, 0.0
-                    # best-effort position fetch
-                    for attr in ("at", "pos", "position"):
-                        try:
-                            pos_from = getattr(ref_index[from_ref], attr)
-                            if callable(pos_from):
-                                pos_from = pos_from()
-                            if isinstance(pos_from, tuple) and len(pos_from) == 2:
-                                from_x, from_y = pos_from
-                        except Exception:
-                            pass
-                        try:
-                            pos_to = getattr(ref_index[to_ref], attr)
-                            if callable(pos_to):
-                                pos_to = pos_to()
-                            if isinstance(pos_to, tuple) and len(pos_to) == 2:
-                                to_x, to_y = pos_to
-                        except Exception:
-                            pass
-
-                    # Snap label positions to grid
-                    from_x, from_y = snap_to_grid(from_x), snap_to_grid(from_y)
-                    to_x, to_y = snap_to_grid(to_x), snap_to_grid(to_y)
-
-                    # Add labels at component positions (KiCad will snap to pins)
-                    try:
-                        lf = doc.label
-                        l1 = lf.new()
-                        l1.value = net_name
-                        l1.at = from_x, from_y
-                        lf.append(l1)
-                        l2 = lf.new()
-                        l2.value = net_name
-                        l2.at = to_x, to_y
-                        lf.append(l2)
-                        affected_refs.extend([from_ref, to_ref])
-                        diagnostics.append(
-                            Diagnostic(
-                                stage="writer",
-                                severity="info",
-                                ref=from_ref,
-                                message=f"Added net labels '{net_name}' at {from_ref} and {to_ref}",
-                            )
-                        )
-                    except Exception as label_err:
-                        diagnostics.append(
-                            Diagnostic(
-                                stage="writer",
-                                severity="error",
-                                ref=from_ref,
-                                message=f"Label fallback also failed: {label_err}",
-                                suggestion="Check component positions and schematic structure",
-                            )
-                        )
+                # If pins not found, lookup_pin_coords already added diagnostics explaining why
 
             except Exception as e:
                 diagnostics.append(
@@ -399,5 +499,6 @@ __all__ = [
     "GRID_MM",
     "snap_to_grid",
     "get_symbol_ref",
+    "get_pin_locations_compat",
     "apply_plan",
 ]

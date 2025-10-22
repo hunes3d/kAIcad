@@ -73,9 +73,9 @@ def has_kicad_cli() -> bool:
 def can_add_components() -> bool:
     """Detect whether kicad-skip supports programmatic symbol creation from libraries."""
     try:
-        from skip.eeschema import schematic as sch
-
-        return hasattr(sch, "Symbol") and hasattr(sch.Symbol, "from_lib")
+        from skip.eeschema.schematic.symbol import Symbol
+        
+        return hasattr(Symbol, "from_lib")
     except Exception:
         return False
 
@@ -112,24 +112,28 @@ def test_add_led_resistor_with_erc():
         assert "D1" in result.affected_refs
 
         # Write to file
-        doc.to_file(str(sch_path))
+        doc.write(str(sch_path))
 
         # Re-read and verify components exist
         doc = sch.Schematic(str(sch_path))
         symbols = list(getattr(doc, "symbol", []))
 
-        refs = [s.ref() for s in symbols]
+        # Import helper to get symbol references
+        from kaicad.core.writer import get_symbol_ref
+        
+        refs = [get_symbol_ref(s) for s in symbols if get_symbol_ref(s)]
         assert "R1" in refs, f"R1 not found in schematic, found: {refs}"
         assert "D1" in refs, f"D1 not found in schematic, found: {refs}"
 
         # Find our symbols and verify values
-        r1 = next((s for s in symbols if s.ref() == "R1"), None)
-        d1 = next((s for s in symbols if s.ref() == "D1"), None)
+        r1 = next((s for s in symbols if get_symbol_ref(s) == "R1"), None)
+        d1 = next((s for s in symbols if get_symbol_ref(s) == "D1"), None)
 
         assert r1 is not None, "R1 symbol not found"
         assert d1 is not None, "D1 symbol not found"
-        assert r1.value() == "1k", f"R1 value wrong: {r1.value()}"
-        assert d1.value() == "RED", f"D1 value wrong: {d1.value()}"
+        # Access Value property's value attribute
+        assert r1.Value.value == "1k", f"R1 value wrong: {r1.Value.value}"
+        assert d1.Value.value == "RED", f"D1 value wrong: {d1.Value.value}"
 
         # Run ERC and verify it completes (doesn't crash)
         erc_output = sch_path.with_suffix(".erc.txt")
@@ -184,7 +188,7 @@ def test_wire_operation_creates_connection():
         assert len(wire_diagnostics) > 0, "Wire operation produced no diagnostics (possible no-op)"
 
         # Write and verify file is valid
-        doc.to_file(str(sch_path))
+        doc.write(str(sch_path))
 
         # Verify KiCad can read the file
         result = subprocess.run(
@@ -302,7 +306,7 @@ def test_netlist_export_after_apply():
         result = apply_plan(doc, plan)
         assert result.success
 
-        doc.to_file(str(sch_path))
+        doc.write(str(sch_path))
 
         # Export netlist
         netlist_path = sch_path.with_suffix(".net")
@@ -319,3 +323,4 @@ def test_netlist_export_after_apply():
         # Verify netlist contains our component
     netlist_content = netlist_path.read_text(encoding="utf-8")
     assert "R1" in netlist_content, "R1 not found in netlist"
+

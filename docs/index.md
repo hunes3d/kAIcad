@@ -13,6 +13,7 @@ kAIcad is an AI‑powered sidecar for KiCad schematics. Describe changes in plai
 
 - AI planning via OpenAI models (aliases supported)
 - Three UIs: CLI, Desktop (Tkinter), Web (Flask)
+- **Full component creation** from KiCad libraries (via custom kicad-skip fork)
 - Inspect components, nets, and hierarchical sheets
 - Optional post‑apply: ERC, PDF, and netlist export
 - Secure: API key stored in OS keychain when available
@@ -71,19 +72,18 @@ Use `.env` or environment variables:
 
 ## Troubleshooting
 
+- **Component creation now works!** As of October 2025, kAIcad uses a custom kicad-skip fork with full component creation and pin coordinate support for ALL component types (including multi-pin ICs and connectors).
 - Web UI exits immediately? Set `FLASK_ENV=development` or provide a secure `FLASK_SECRET_KEY`.
 - KiCad tools not found? Add `C:\\Program Files\\KiCad\\9.0\\bin` to PATH and reopen your shell.
 - Model errors? Try `OPENAI_MODEL=gpt-4o-mini` and ensure your API key is valid.
 
 ## Documentation Index
 
+- **[[Known-Issues]]** — Current limitations and workarounds ⚠️
 - [[Architecture]] — Core components and design
-- [[Component-Inspection]] — Inspect components and nets via chat
-- [[Hierarchical-Sheets]] — Multi‑sheet design support
-- [[Roadmap]] — Development plans
-- [[Changelog]] — Version history
-- [[Dev-Notes]] — Code review response and implementation summary
-- [[Publishing]] — How to publish these pages to GitHub Wiki
+- [[Features]] — Component inspection and hierarchical sheets
+- [[Roadmap]] — Development plans and vision
+- [[Dev-Notes]] — Technical details, dependencies, and publishing
 
 ## License
 

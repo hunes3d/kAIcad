@@ -101,6 +101,43 @@ def test_apply_plan_diagnostic_on_error():
         assert errors[0].ref == "R1"
 
 
+def test_symbol_from_lib_not_available_error():
+    """Test that Symbol.from_lib works with the kicad-skip fork"""
+    from skip.eeschema import schematic as sch
+    from pathlib import Path
+    import tempfile
+    
+    plan = Plan(
+        plan_version=1,
+        ops=[{"op": "add_component", "ref": "D1", "symbol": "Device:LED", "value": "RED", "at": [100, 50]}],
+    )
+
+    # Create a real but empty schematic to test with
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.kicad_sch', delete=False) as f:
+        # Write minimal valid KiCad schematic
+        f.write('(kicad_sch (version 20231120) (generator "eeschema") (paper "A4"))')
+        temp_path = f.name
+    
+    try:
+        doc = sch.Schematic(temp_path)
+        
+        # With the kicad-skip fork, Symbol.from_lib should work
+        result = apply_plan(doc, plan)
+
+        # Should succeed now!
+        assert result.success is True
+        assert "D1" in result.affected_refs
+        
+        # Should have an info diagnostic about adding the component
+        infos = [d for d in result.diagnostics if d.severity == "info" and d.ref == "D1"]
+        assert len(infos) == 1
+        assert "Added D1" in infos[0].message
+        
+    finally:
+        # Clean up
+        Path(temp_path).unlink(missing_ok=True)
+
+
 def test_kicad_cli_test_button():
     """Test KiCad CLI test functionality (mocked)"""
     import subprocess

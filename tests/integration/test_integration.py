@@ -35,7 +35,7 @@ def test_plan_wire_minimal():
 
         doc = sch.Schematic(str(sch_path))
         doc = apply_plan(doc, plan)
-        doc.to_file(str(sch_path))
+        doc.write(str(sch_path))
 
         # Re-read and verify
         doc = sch.Schematic(str(sch_path))
@@ -118,3 +118,4 @@ def test_plan_serialization_includes_version():
     json_str = json.dumps(dumped)
     reloaded = Plan.model_validate(json.loads(json_str))
     assert reloaded.plan_version == plan.plan_version
+

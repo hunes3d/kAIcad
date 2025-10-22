@@ -154,6 +154,16 @@ See `.env.example` for a ready-to-copy template.
 
 ### Common issues
 
+- **"Symbol.from_lib is not available" error when adding components?**  
+  Current limitation: kicad-skip 0.2.5 doesn't support creating symbols programmatically.  
+  **Workaround**: Add components manually in KiCad first, then use kAIcad for wiring and labels only.  
+  Example workflow:
+  1. Open schematic in KiCad and place components (R1, D1, C1, etc.)
+  2. Save and close KiCad
+  3. Use kAIcad to ask "Connect R1 pin 2 to D1 pin 1" or "Add VCC label near R1"
+  
+  This limitation will be resolved in future releases when kicad-skip library adds symbol creation support.
+
 - **Web UI exits immediately?**  
   Set `FLASK_ENV=development` or provide a secure `FLASK_SECRET_KEY`.
 
@@ -179,6 +189,7 @@ See `.env.example` for a ready-to-copy template.
 
 Documentation is available in the `docs/` folder:
 
+- **[Known Issues & Workarounds](docs/known-issues.md)** — Current limitations and how to work around them ⚠️
 - [Architecture](docs/architecture.md) — System design and module overview
 - [Component Inspection](docs/component-inspection.md) — Querying components and nets
 - [Hierarchical Sheets](docs/hierarchical-sheets.md) — Working with hierarchical designs
@@ -194,6 +205,6 @@ AGPL-3.0 — see [`LICENSE`](LICENSE).
 
 ## Acknowledgments
 
-- kicad-skip — KiCad file manipulation
+- **kicad-skip** — KiCad file manipulation (using custom fork with `Symbol.from_lib()` support: https://github.com/hunes3d/kicad-skip)
 - OpenAI — language models
 - KiCad — Open‑source EDA suite
