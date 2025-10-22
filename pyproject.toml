@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaicad"
-version = "0.2.0"
+version = "0.1.0"
 description = "AI-powered KiCad schematic editor"
 authors = [{name = "Gunes Yilmaz"}]
 readme = "README.md"
@@ -51,7 +51,8 @@ test = [
 ]
 
 [project.scripts]
-kaicad = "kaicad.ui.cli:main"
+kaicad = "kaicad.ui.launcher:main"
+kaicad-cli = "kaicad.ui.cli:main"
 kaicad-web = "kaicad.ui.web.app:main"
 kaicad-desk = "kaicad.ui.desktop:main"
 

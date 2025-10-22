@@ -27,6 +27,15 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
     
+    - name: Check for KiCad CLI (optional)
+      run: |
+        if command -v kicad-cli &> /dev/null; then
+          echo "✓ kicad-cli found: $(kicad-cli --version)"
+        else
+          echo "⚠️  kicad-cli not found - some tests will be skipped"
+        fi
+      continue-on-error: true
+    
     - name: Lint with ruff
       run: |
         ruff check src/ tests/ || echo "⚠️ Linting failed (non-blocking)"
