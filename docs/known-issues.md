@@ -6,7 +6,7 @@ This document lists current known limitations and provides practical workarounds
 
 
 
-## ✅ Component Creation & Pin Coordinates Now Fully Supported!## ✅ Component Creation Now Supported!
+## ✅ Component Creation & Pin Coordinates Now Fully Supported!##
 
 
 
@@ -14,23 +14,21 @@ This document lists current known limitations and provides practical workarounds
 
 
 
-**What Now Works**:**What Now Works**:
+**What Now Works**:
 
-- ✅ `add_component` operations create symbols directly- ✅ `add_component` operations create symbols directly
+- ✅ `add_component` operations create symbols directly
 
-- ✅ AI requests like "Add LED and resistor" work end-to-end  - ✅ AI requests like "Add LED and resistor" work end-to-end  
+- ✅ AI requests like "Add LED and resistor" work end-to-end
 
-- ✅ Full programmatic circuit creation from scratch- ✅ Full programmatic circuit creation from scratch
+- ✅ Full programmatic circuit creation from scratch
 
-- ✅ Direct property assignment (`sym.Value = "1k"`)- ✅ Direct property assignment (`sym.Value = "1k"`)
+- ✅ Direct property assignment (`sym.Value = "1k"`)
 
 - ✅ **Full pin coordinate support for ALL component types**
 
-- ✅ **Direct wiring for 2-pin AND multi-pin components (ICs, connectors, etc.)****Fork Details**:
+- ✅ **Direct wiring for 2-pin AND multi-pin components (ICs, connectors, etc.)**
 
-- Repository: https://github.com/hunes3d/kicad-skip
-
-**Fork Details**:- Key Features:
+**Dependancy Details**:- Key Features:
 
 - Repository: https://github.com/hunes3d/kicad-skip  - `Symbol.from_lib(doc, lib_id, reference, at_x, at_y)` method
 
