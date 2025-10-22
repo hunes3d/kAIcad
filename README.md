@@ -5,10 +5,10 @@
   <p><strong>AI‑powered sidecar for KiCad schematics</strong></p>
 
   <p>
-    <a href="https://github.com/hunes3d/kAIcad/actions"><img alt="CI" src="https://github.com/hunes3d/kAIcad/workflows/CI/badge.svg"></a>
+    <a href="https://github.com/hunes3d/kAIcad/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/hunes3d/kAIcad/actions/workflows/ci.yml/badge.svg"></a>
     <img alt="Python" src="https://img.shields.io/badge/python-3.10+-blue.svg">
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg"></a>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-green.svg">
+    <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-green.svg">
   </p>
 
   <p>Describe a change in plain English → get a plan → apply it to your <code>.kicad_sch</code> file.</p>
@@ -47,10 +47,18 @@ pipx install git+https://github.com/hunes3d/kAIcad.git
 "OPENAI_MODEL=gpt-4o-mini"   | Add-Content .env
 "FLASK_ENV=development"      | Add-Content .env  # for local web UI without a custom secret
 
-# Launch your preferred UI
-kaicad-desk   # Desktop GUI
-# kaicad-web  # Web UI at http://127.0.0.1:5173
-# kaicad      # CLI
+# Launch the interactive launcher to choose your UI
+kaicad        # Interactive menu to select CLI, Desktop, or Web
+
+# Or launch directly
+kaicad --cli      # Command-line interface
+kaicad --desktop  # Desktop GUI (Tkinter)
+kaicad --web      # Web UI at http://127.0.0.1:5173
+
+# Alternative direct commands
+kaicad-cli    # Same as 'kaicad --cli'
+kaicad-desk   # Same as 'kaicad --desktop'
+kaicad-web    # Same as 'kaicad --web'
 ```
 
 #### Option B — dev install:
@@ -65,9 +73,14 @@ pip install -e .
 Copy-Item .env.example .env
 # Edit .env to set OPENAI_API_KEY and (optionally) OPENAI_MODEL
 
+# Launch the interactive launcher
+kaicad
+
+# Or launch directly
+python -m kaicad.ui.launcher  # Interactive menu
+python -m kaicad.ui.cli       # CLI
 python -m kaicad.ui.desktop   # Desktop GUI
-# python -m kaicad.ui.web.app  # Web UI
-# python -m kaicad.ui.cli      # CLI
+python -m kaicad.ui.web.app   # Web UI
 ```
 
 ### macOS / Linux (Bash/Zsh)

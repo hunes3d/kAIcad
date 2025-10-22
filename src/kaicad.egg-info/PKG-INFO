@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: kaicad
-Version: 0.2.0
+Version: 0.1.0
 Summary: AI-powered KiCad schematic editor
 Author: Gunes Yilmaz
 License: AGPL-3.0 License
@@ -27,11 +27,12 @@ Classifier: Programming Language :: Python :: 3.14
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: kicad-skip==0.2.5
+Requires-Dist: kicad-skip@ git+https://github.com/hunes3d/kicad-skip.git
 Requires-Dist: pydantic<3.0.0,>=2.0.0
 Requires-Dist: openai<2.0.0,>=1.0.0
 Requires-Dist: flask<4.0.0,>=3.0.0
 Requires-Dist: flask-wtf<2.0.0,>=1.2.0
+Requires-Dist: flask-limiter<4.0.0,>=3.5.0
 Requires-Dist: rich<14.0.0,>=13.0.0
 Requires-Dist: typer<1.0.0,>=0.9.0
 Requires-Dist: watchdog<5.0.0,>=3.0.0
@@ -39,8 +40,11 @@ Requires-Dist: keyring<26.0.0,>=24.0.0
 Requires-Dist: python-dotenv<2.0.0,>=1.0.0
 Provides-Extra: dev
 Requires-Dist: pytest<9.0.0,>=8.0.0; extra == "dev"
-Requires-Dist: pre-commit<4.0.0,>=3.0.0; extra == "dev"
-Requires-Dist: ruff<1.0.0,>=0.1.0; extra == "dev"
+Requires-Dist: pytest-cov<6.0.0,>=4.0.0; extra == "dev"
+Requires-Dist: pip-tools<8.0.0,>=7.0.0; extra == "dev"
+Requires-Dist: pre-commit<5.0.0,>=4.0.0; extra == "dev"
+Requires-Dist: ruff<1.0.0,>=0.8.0; extra == "dev"
+Requires-Dist: mypy<2.0.0,>=1.13.0; extra == "dev"
 Provides-Extra: test
 Requires-Dist: pytest<9.0.0,>=8.0.0; extra == "test"
 Requires-Dist: pytest-cov<6.0.0,>=4.0.0; extra == "test"
@@ -53,10 +57,10 @@ Dynamic: license-file
   <p><strong>AI‑powered sidecar for KiCad schematics</strong></p>
 
   <p>
-    <a href="https://github.com/hunes3d/kAIcad/actions"><img alt="CI" src="https://github.com/hunes3d/kAIcad/workflows/CI/badge.svg"></a>
+    <a href="https://github.com/hunes3d/kAIcad/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/hunes3d/kAIcad/actions/workflows/ci.yml/badge.svg"></a>
     <img alt="Python" src="https://img.shields.io/badge/python-3.10+-blue.svg">
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg"></a>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.2.0-green.svg">
+    <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-green.svg">
   </p>
 
   <p>Describe a change in plain English → get a plan → apply it to your <code>.kicad_sch</code> file.</p>
@@ -76,14 +80,16 @@ Dynamic: license-file
 - ✅ Optional post‑apply: ERC, PDF, and netlist export
 - � Stores API key in your OS keychain when available
 
-## Quick start (Windows, PowerShell)
+## Quick start
+
+### Windows (PowerShell)
 
 Prerequisites:
 - Python 3.10+
 - KiCad 9 CLI on PATH (verify with: `kicad-cli --version`)
 - OpenAI API key
 
-Option A — pipx (recommended):
+#### Option A — pipx (recommended):
 
 ```powershell
 pipx install git+https://github.com/hunes3d/kAIcad.git
@@ -93,13 +99,21 @@ pipx install git+https://github.com/hunes3d/kAIcad.git
 "OPENAI_MODEL=gpt-4o-mini"   | Add-Content .env
 "FLASK_ENV=development"      | Add-Content .env  # for local web UI without a custom secret
 
-# Launch your preferred UI
-kaicad-desk   # Desktop GUI
-# kaicad-web  # Web UI at http://127.0.0.1:5173
-# kaicad      # CLI
+# Launch the interactive launcher to choose your UI
+kaicad        # Interactive menu to select CLI, Desktop, or Web
+
+# Or launch directly
+kaicad --cli      # Command-line interface
+kaicad --desktop  # Desktop GUI (Tkinter)
+kaicad --web      # Web UI at http://127.0.0.1:5173
+
+# Alternative direct commands
+kaicad-cli    # Same as 'kaicad --cli'
+kaicad-desk   # Same as 'kaicad --desktop'
+kaicad-web    # Same as 'kaicad --web'
 ```
 
-Option B — dev install:
+#### Option B — dev install:
 
 ```powershell
 git clone https://github.com/hunes3d/kAIcad.git
@@ -109,6 +123,56 @@ python -m venv .venv
 pip install -e .
 
 Copy-Item .env.example .env
+# Edit .env to set OPENAI_API_KEY and (optionally) OPENAI_MODEL
+
+# Launch the interactive launcher
+kaicad
+
+# Or launch directly
+python -m kaicad.ui.launcher  # Interactive menu
+python -m kaicad.ui.cli       # CLI
+python -m kaicad.ui.desktop   # Desktop GUI
+python -m kaicad.ui.web.app   # Web UI
+```
+
+### macOS / Linux (Bash/Zsh)
+
+Prerequisites:
+- Python 3.10+
+- KiCad 9 CLI on PATH (verify with: `kicad-cli --version`)
+  - macOS: Install KiCad.app, then add to PATH:  
+    `export PATH="/Applications/KiCad/KiCad.app/Contents/MacOS:$PATH"`
+  - Linux: Install via package manager (e.g., `apt install kicad` on Ubuntu/Debian)
+- OpenAI API key
+
+#### Option A — pipx (recommended):
+
+```bash
+pipx install git+https://github.com/hunes3d/kAIcad.git
+
+# Create a .env file (or set env vars) next to your project
+cat > .env << EOF
+OPENAI_API_KEY=sk-your-key
+OPENAI_MODEL=gpt-4o-mini
+FLASK_ENV=development
+EOF
+
+# Launch your preferred UI
+kaicad-desk   # Desktop GUI
+# kaicad-web  # Web UI at http://127.0.0.1:5173
+# kaicad      # CLI
+```
+
+#### Option B — dev install:
+
+```bash
+git clone https://github.com/hunes3d/kAIcad.git
+cd kAIcad
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+cp .env.example .env
 # Edit .env to set OPENAI_API_KEY and (optionally) OPENAI_MODEL
 
 python -m kaicad.ui.desktop   # Desktop GUI
@@ -153,14 +217,44 @@ See `.env.example` for a ready-to-copy template.
 
 ## Tips & troubleshooting
 
-- Web UI exits immediately? Set `FLASK_ENV=development` or provide a secure `FLASK_SECRET_KEY`.
-- KiCad tools not found? Add `C:\\Program Files\\KiCad\\9.0\\bin` to PATH and re-open your shell.
-- Model errors? Try `OPENAI_MODEL=gpt-4o-mini` and ensure your API key is valid.
+### Common issues
+
+- **"Symbol.from_lib is not available" error when adding components?**  
+  Current limitation: kicad-skip 0.2.5 doesn't support creating symbols programmatically.  
+  **Workaround**: Add components manually in KiCad first, then use kAIcad for wiring and labels only.  
+  Example workflow:
+  1. Open schematic in KiCad and place components (R1, D1, C1, etc.)
+  2. Save and close KiCad
+  3. Use kAIcad to ask "Connect R1 pin 2 to D1 pin 1" or "Add VCC label near R1"
+  
+  This limitation will be resolved in future releases when kicad-skip library adds symbol creation support.
+
+- **Web UI exits immediately?**  
+  Set `FLASK_ENV=development` or provide a secure `FLASK_SECRET_KEY`.
+
+- **KiCad tools not found?**  
+  - Windows: Add `C:\Program Files\KiCad\9.0\bin` to PATH and re-open your shell.
+  - macOS: Add KiCad to PATH: `export PATH="/Applications/KiCad/KiCad.app/Contents/MacOS:$PATH"`
+  - Linux: Ensure `kicad-cli` is installed and on PATH (e.g., `which kicad-cli`)
+
+- **Model errors?**  
+  Try `OPENAI_MODEL=gpt-4o-mini` and ensure your API key is valid.
+
+- **Python version issues?**  
+  - Linux/macOS: Use `python3` instead of `python`
+  - Verify version with: `python --version` (or `python3 --version`)
+
+### Platform-specific notes
+
+- **macOS**: The desktop GUI requires Tkinter (included with python.org Python, may need separate install for Homebrew Python)
+- **Linux**: Install `python3-tk` package for desktop GUI support (e.g., `apt install python3-tk` on Ubuntu/Debian)
+- **Windows**: Tkinter is included with standard Python installer
 
 ## Wiki
 
 Documentation is available in the `docs/` folder:
 
+- **[Known Issues & Workarounds](docs/known-issues.md)** — Current limitations and how to work around them ⚠️
 - [Architecture](docs/architecture.md) — System design and module overview
 - [Component Inspection](docs/component-inspection.md) — Querying components and nets
 - [Hierarchical Sheets](docs/hierarchical-sheets.md) — Working with hierarchical designs
@@ -176,6 +270,6 @@ AGPL-3.0 — see [`LICENSE`](LICENSE).
 
 ## Acknowledgments
 
-- kicad-skip — KiCad file manipulation
+- **kicad-skip** — KiCad file manipulation (using custom fork with `Symbol.from_lib()` support: https://github.com/hunes3d/kicad-skip)
 - OpenAI — language models
 - KiCad — Open‑source EDA suite

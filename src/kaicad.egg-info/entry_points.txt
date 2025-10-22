@@ -1,4 +1,5 @@
 [console_scripts]
-kaicad = kaicad.ui.cli:main
+kaicad = kaicad.ui.launcher:main
+kaicad-cli = kaicad.ui.cli:main
 kaicad-desk = kaicad.ui.desktop:main
 kaicad-web = kaicad.ui.web.app:main

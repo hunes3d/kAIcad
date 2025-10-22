@@ -1,8 +1,9 @@
-kicad-skip==0.2.5
+kicad-skip@ git+https://github.com/hunes3d/kicad-skip.git
 pydantic<3.0.0,>=2.0.0
 openai<2.0.0,>=1.0.0
 flask<4.0.0,>=3.0.0
 flask-wtf<2.0.0,>=1.2.0
+flask-limiter<4.0.0,>=3.5.0
 rich<14.0.0,>=13.0.0
 typer<1.0.0,>=0.9.0
 watchdog<5.0.0,>=3.0.0
@@ -11,8 +12,11 @@ python-dotenv<2.0.0,>=1.0.0
 
 [dev]
 pytest<9.0.0,>=8.0.0
-pre-commit<4.0.0,>=3.0.0
-ruff<1.0.0,>=0.1.0
+pytest-cov<6.0.0,>=4.0.0
+pip-tools<8.0.0,>=7.0.0
+pre-commit<5.0.0,>=4.0.0
+ruff<1.0.0,>=0.8.0
+mypy<2.0.0,>=1.13.0
 
 [test]
 pytest<9.0.0,>=8.0.0
