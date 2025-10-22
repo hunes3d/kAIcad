@@ -11,3 +11,21 @@ __pycache__/
 .chat_history.json
 .plan_history.json
 .current_project.json
+
+# Build and distribution
+build/
+dist/
+release/
+release_artifacts/
+*.egg-info/
+*.spec
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Temporary test files
+temp_*.kicad_sch
+test_*.py
